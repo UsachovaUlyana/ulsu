@@ -1,0 +1,1 @@
+"""Profile Service — entry point."""

@@ -1,0 +1,265 @@
+version: "3.8"
+
+services:
+  # ============================================================
+  # Infrastructure
+  # ============================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dating-postgres
+    environment:
+      POSTGRES_DB: dating_bot
+      POSTGRES_USER: dating_user
+      POSTGRES_PASSWORD: dating_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating_user -d dating_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dating-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: dating-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dating-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: dating-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: dating_user
+      RABBITMQ_DEFAULT_PASS: dating_pass
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dating-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: dating-minio
+    environment:
+      MINIO_ROOT_USER: minio_user
+      MINIO_ROOT_PASSWORD: minio_pass
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dating-network
+
+  # ============================================================
+  # Monitoring
+  # ============================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dating-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - dating-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dating-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - dating-network
+
+  # ============================================================
+  # Application Services
+  # ============================================================
+
+  bot-service:
+    build:
+      context: ./services/bot-service
+      dockerfile: Dockerfile
+    container_name: dating-bot-service
+    env_file:
+      - .env
+    environment:
+      - PROFILE_SERVICE_URL=http://profile-service:8001
+      - RANKING_SERVICE_URL=http://ranking-service:8002
+      - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      profile-service:
+        condition: service_started
+      ranking-service:
+        condition: service_started
+    networks:
+      - dating-network
+
+  profile-service:
+    build:
+      context: ./services/profile-service
+      dockerfile: Dockerfile
+    container_name: dating-profile-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minio_user
+      - MINIO_SECRET_KEY=minio_pass
+      - MINIO_BUCKET=photos
+      - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+  ranking-service:
+    build:
+      context: ./services/ranking-service
+      dockerfile: Dockerfile
+    container_name: dating-ranking-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+  celery-worker:
+    build:
+      context: ./services/ranking-service
+      dockerfile: Dockerfile
+    container_name: dating-celery-worker
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+  celery-beat:
+    build:
+      context: ./services/ranking-service
+      dockerfile: Dockerfile
+    container_name: dating-celery-beat
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+  matching-service:
+    build:
+      context: ./services/matching-service
+      dockerfile: Dockerfile
+    container_name: dating-matching-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
+      - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: dating-notification-service
+    env_file:
+      - .env
+    environment:
+      - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dating-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  dating-network:
+    driver: bridge
