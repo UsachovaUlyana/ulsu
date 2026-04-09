@@ -124,8 +124,11 @@ services:
       - PROFILE_SERVICE_URL=http://profile-service:8001
       - RANKING_SERVICE_URL=http://ranking-service:8002
       - RABBITMQ_URL=amqp://dating_user:dating_pass@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       profile-service:
         condition: service_started
