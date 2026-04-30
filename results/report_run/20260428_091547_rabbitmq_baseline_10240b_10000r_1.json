@@ -1,0 +1,79 @@
+{
+  "run_id": "20260428_091547_rabbitmq_baseline_10240b_10000r_1",
+  "broker": "rabbitmq",
+  "profile": "baseline",
+  "msg_size": 10240,
+  "rate": 10000,
+  "duration": 8,
+  "producers": 2,
+  "consumers": 2,
+  "sent_total": 12998,
+  "consumed_unique_total": 12998,
+  "duplicate_count": 0,
+  "lost_total": 0,
+  "publish_errors": 0,
+  "consume_errors": 0,
+  "throughput_msg_sec": 1624.75,
+  "avg_latency_ms": 4.724,
+  "p95_latency_ms": 13.665,
+  "max_latency_ms": 65.279,
+  "backlog_peak": 19,
+  "backlog_samples": [
+    {
+      "ts_s": 0.013,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 1.021,
+      "queue_depth": 5
+    },
+    {
+      "ts_s": 2.029,
+      "queue_depth": 8
+    },
+    {
+      "ts_s": 3.037,
+      "queue_depth": 6
+    },
+    {
+      "ts_s": 4.09,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 5.1,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 6.11,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 7.121,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 8.13,
+      "queue_depth": 19
+    },
+    {
+      "ts_s": 9.138,
+      "queue_depth": 0
+    }
+  ],
+  "degradation": {
+    "backlog_growing": false,
+    "p95_over_baseline": false,
+    "errors_stable": false,
+    "repeated_loss_candidate": false,
+    "is_degraded": false,
+    "details": {
+      "error_rate": 0.0,
+      "loss_rate": 0.0,
+      "baseline_p95_ms": null,
+      "p95_multiplier": 2.0,
+      "window_samples": 30
+    }
+  },
+  "started_at_iso": "2026-04-28T09:15:47Z",
+  "finished_at_iso": "2026-04-28T09:15:57Z"
+}

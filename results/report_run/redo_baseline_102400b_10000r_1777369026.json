@@ -1,0 +1,67 @@
+{
+  "run_id": "redo_baseline_102400b_10000r_1777369026",
+  "broker": "redis",
+  "profile": "baseline",
+  "msg_size": 102400,
+  "rate": 10000,
+  "duration": 8,
+  "producers": 2,
+  "consumers": 2,
+  "sent_total": 9856,
+  "consumed_unique_total": 9856,
+  "duplicate_count": 0,
+  "lost_total": 0,
+  "publish_errors": 231,
+  "consume_errors": 206,
+  "throughput_msg_sec": 1232.0,
+  "avg_latency_ms": 1.621,
+  "p95_latency_ms": 2.543,
+  "max_latency_ms": 34.569,
+  "backlog_peak": 2,
+  "backlog_samples": [
+    {
+      "ts_s": 0.002,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 1.005,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 2.01,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 3.015,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 4.02,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 5.022,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 6.027,
+      "queue_depth": 2
+    }
+  ],
+  "degradation": {
+    "backlog_growing": false,
+    "p95_over_baseline": false,
+    "errors_stable": true,
+    "repeated_loss_candidate": false,
+    "is_degraded": true,
+    "details": {
+      "error_rate": 0.044338,
+      "loss_rate": 0.0,
+      "baseline_p95_ms": null,
+      "p95_multiplier": 2.0,
+      "window_samples": 30
+    }
+  },
+  "started_at_iso": "2026-04-28T09:37:07Z",
+  "finished_at_iso": "2026-04-28T09:38:15Z"
+}

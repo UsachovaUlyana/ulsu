@@ -1,0 +1,55 @@
+{
+  "run_id": "smoke_rabbit_2",
+  "broker": "rabbitmq",
+  "profile": "baseline",
+  "msg_size": 128,
+  "rate": 100,
+  "duration": 3,
+  "producers": 2,
+  "consumers": 2,
+  "sent_total": 300,
+  "consumed_unique_total": 300,
+  "duplicate_count": 0,
+  "lost_total": 0,
+  "publish_errors": 0,
+  "consume_errors": 0,
+  "throughput_msg_sec": 100.0,
+  "avg_latency_ms": 6.413,
+  "p95_latency_ms": 12.104,
+  "max_latency_ms": 19.211,
+  "backlog_peak": 2,
+  "backlog_samples": [
+    {
+      "ts_s": 0.014,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 1.02,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 2.026,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 3.033,
+      "queue_depth": 0
+    }
+  ],
+  "degradation": {
+    "backlog_growing": false,
+    "p95_over_baseline": false,
+    "errors_stable": false,
+    "repeated_loss_candidate": false,
+    "is_degraded": false,
+    "details": {
+      "error_rate": 0.0,
+      "loss_rate": 0.0,
+      "baseline_p95_ms": null,
+      "p95_multiplier": 2.0,
+      "window_samples": 30
+    }
+  },
+  "started_at_iso": "2026-04-28T09:06:08Z",
+  "finished_at_iso": "2026-04-28T09:06:12Z"
+}

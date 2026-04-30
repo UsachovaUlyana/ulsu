@@ -1,0 +1,71 @@
+{
+  "run_id": "redo_stress_102400b_5000r_1777368862",
+  "broker": "redis",
+  "profile": "stress",
+  "msg_size": 102400,
+  "rate": 5000,
+  "duration": 8,
+  "producers": 2,
+  "consumers": 2,
+  "sent_total": 9855,
+  "consumed_unique_total": 9855,
+  "duplicate_count": 0,
+  "lost_total": 0,
+  "publish_errors": 210,
+  "consume_errors": 506,
+  "throughput_msg_sec": 1231.875,
+  "avg_latency_ms": 1.708,
+  "p95_latency_ms": 2.745,
+  "max_latency_ms": 38.516,
+  "backlog_peak": 2,
+  "backlog_samples": [
+    {
+      "ts_s": 0.003,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 1.012,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 2.018,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 3.023,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 4.03,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 5.034,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 6.039,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 7.047,
+      "queue_depth": 2
+    }
+  ],
+  "degradation": {
+    "backlog_growing": false,
+    "p95_over_baseline": false,
+    "errors_stable": true,
+    "repeated_loss_candidate": false,
+    "is_degraded": true,
+    "details": {
+      "error_rate": 0.072653,
+      "loss_rate": 0.0,
+      "baseline_p95_ms": null,
+      "p95_multiplier": 2.0,
+      "window_samples": 30
+    }
+  },
+  "started_at_iso": "2026-04-28T09:34:23Z",
+  "finished_at_iso": "2026-04-28T09:37:06Z"
+}

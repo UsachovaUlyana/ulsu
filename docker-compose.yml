@@ -1,22 +1,43 @@
 services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: store_db
-    ports:
-      - "5432:5432"
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    cpus: "1.0"
+    mem_limit: "512m"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d store_db"]
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 3s
+      retries: 20
 
-  app:
-    build: .
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/store_db
+  redis:
+    image: redis:7.2
+    hostname: redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    cpus: "1.0"
+    mem_limit: "512m"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  bench:
+    build:
+      context: .
+      dockerfile: Dockerfile
     depends_on:
-      db:
+      rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./results:/app/results
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASS=guest
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    profiles: ["manual"]

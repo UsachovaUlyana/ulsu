@@ -1,0 +1,4 @@
+run_id,broker,profile,msg_size,rate,duration,producers,consumers,sent_total,consumed_unique_total,duplicate_count,lost_total,publish_errors,consume_errors,throughput_msg_sec,avg_latency_ms,p95_latency_ms,max_latency_ms,backlog_peak,degraded,backlog_growing,p95_over_baseline,errors_stable,repeated_loss_candidate,started_at_iso,finished_at_iso
+smoke_rabbit,rabbitmq,baseline,128,100,5,2,2,500,500,0,0,0,0,100.0,7.227,12.959,34.216,1,False,False,False,False,False,2026-04-28T09:05:10Z,2026-04-28T09:05:24Z
+smoke_redis,redis,baseline,128,100,5,2,2,500,500,0,0,0,0,100.0,0.859,1.335,4.053,0,False,False,False,False,False,2026-04-28T09:05:25Z,2026-04-28T09:05:33Z
+smoke_rabbit_2,rabbitmq,baseline,128,100,3,2,2,300,300,0,0,0,0,100.0,6.413,12.104,19.211,2,False,False,False,False,False,2026-04-28T09:06:08Z,2026-04-28T09:06:12Z

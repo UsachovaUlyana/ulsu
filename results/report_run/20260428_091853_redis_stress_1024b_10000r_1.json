@@ -1,0 +1,83 @@
+{
+  "run_id": "20260428_091853_redis_stress_1024b_10000r_1",
+  "broker": "redis",
+  "profile": "stress",
+  "msg_size": 1024,
+  "rate": 10000,
+  "duration": 8,
+  "producers": 2,
+  "consumers": 2,
+  "sent_total": 50477,
+  "consumed_unique_total": 50477,
+  "duplicate_count": 0,
+  "lost_total": 0,
+  "publish_errors": 0,
+  "consume_errors": 0,
+  "throughput_msg_sec": 6309.625,
+  "avg_latency_ms": 0.607,
+  "p95_latency_ms": 1.154,
+  "max_latency_ms": 3.114,
+  "backlog_peak": 6,
+  "backlog_samples": [
+    {
+      "ts_s": 0.002,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 1.007,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 2.011,
+      "queue_depth": 2
+    },
+    {
+      "ts_s": 3.016,
+      "queue_depth": 1
+    },
+    {
+      "ts_s": 4.019,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 5.022,
+      "queue_depth": 4
+    },
+    {
+      "ts_s": 6.025,
+      "queue_depth": 6
+    },
+    {
+      "ts_s": 7.028,
+      "queue_depth": 3
+    },
+    {
+      "ts_s": 8.033,
+      "queue_depth": 4
+    },
+    {
+      "ts_s": 9.038,
+      "queue_depth": 0
+    },
+    {
+      "ts_s": 10.044,
+      "queue_depth": 0
+    }
+  ],
+  "degradation": {
+    "backlog_growing": false,
+    "p95_over_baseline": false,
+    "errors_stable": false,
+    "repeated_loss_candidate": false,
+    "is_degraded": false,
+    "details": {
+      "error_rate": 0.0,
+      "loss_rate": 0.0,
+      "baseline_p95_ms": 1.176,
+      "p95_multiplier": 2.0,
+      "window_samples": 30
+    }
+  },
+  "started_at_iso": "2026-04-28T09:18:53Z",
+  "finished_at_iso": "2026-04-28T09:19:03Z"
+}

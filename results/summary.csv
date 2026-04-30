@@ -1,0 +1,3 @@
+broker,profile,msg_size,rate,runs,throughput_median,throughput_min,throughput_max,p95_median,loss_median,loss_max,backlog_peak_median
+rabbitmq,baseline,128,100,1,100.0,100.0,100.0,12.959,0,0,1
+redis,baseline,128,100,1,100.0,100.0,100.0,1.335,0,0,0
