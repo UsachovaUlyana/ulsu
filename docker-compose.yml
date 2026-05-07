@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: p3-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cachebench
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cachebench"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: p3-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    container_name: p3-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      CACHE_STRATEGY: ${CACHE_STRATEGY:-cache_aside}
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/cachebench
+      REDIS_URL: redis://redis:6379/0
+      SEED_ITEMS: ${SEED_ITEMS:-10000}
+      CACHE_TTL: ${CACHE_TTL:-300}
+      WB_FLUSH_INTERVAL: ${WB_FLUSH_INTERVAL:-1.0}
+      WB_FLUSH_BATCH: ${WB_FLUSH_BATCH:-500}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  loadgen:
+    build: .
+    container_name: p3-loadgen
+    profiles: ["bench"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_URL: http://app:8000
+      N_KEYS: ${N_KEYS:-10000}
+      DURATION: ${DURATION:-60}
+      CONCURRENCY: ${CONCURRENCY:-100}
+      RESULTS_DIR: /results
+      WB_TAIL_WAIT: ${WB_TAIL_WAIT:-10}
+      ZIPF_ALPHA: ${ZIPF_ALPHA:-1.2}
+    volumes:
+      - ./results:/results
+    entrypoint: ["python", "-m", "loadgen.runner"]
