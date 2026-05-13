@@ -14,7 +14,7 @@
 Скопируй `.env.example` в `.env` в корне проекта:
 
 ```bash
-cd /Users/ulyana/Documents/высоконагруженные_системы/ulsu
+cd <корень_репо>
 cp .env.example .env
 ```
 

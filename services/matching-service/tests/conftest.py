@@ -1,0 +1,24 @@
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent))
+
+if "shared" not in sys.modules:
+    spec = importlib.util.spec_from_file_location(
+        "shared", str(ROOT.parent / "_shared" / "__init__.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules["shared"] = module
+    for sub in ("logging", "events", "metrics", "settings", "rabbitmq"):
+        sub_spec = importlib.util.spec_from_file_location(
+            f"shared.{sub}", str(ROOT.parent / "_shared" / f"{sub}.py")
+        )
+        sub_mod = importlib.util.module_from_spec(sub_spec)
+        sys.modules[f"shared.{sub}"] = sub_mod
+        sub_spec.loader.exec_module(sub_mod)

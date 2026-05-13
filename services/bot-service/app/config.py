@@ -1,30 +1,15 @@
-"""Configuration for Bot Service."""
+from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.settings import CommonSettings
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
-    )
-
-    # Telegram Bot
+class Settings(CommonSettings):
     telegram_bot_token: str
-
-    # Service URLs
     profile_service_url: str = "http://profile-service:8001"
     ranking_service_url: str = "http://ranking-service:8002"
-
-    # Redis (for FSM storage)
+    matching_service_url: str = "http://matching-service:8003"
     redis_url: str = "redis://redis:6379/0"
-
-    # RabbitMQ
-    rabbitmq_url: str = "amqp://dating_user:dating_pass@rabbitmq:5672/"
-
-    # Logging
-    log_level: str = "INFO"
+    swipe_rate_limit_per_min: int = 30
 
 
 settings = Settings()

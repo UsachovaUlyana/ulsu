@@ -1,26 +1,26 @@
-"""FSM states for profile registration."""
+from __future__ import annotations
 
 from aiogram.fsm.state import State, StatesGroup
 
 
-class RegistrationForm(StatesGroup):
-    """States for the profile registration FSM."""
-
-    # Step 1: Basic info
+class Registration(StatesGroup):
     name = State()
     age = State()
     gender = State()
     city = State()
-
-    # Step 2: Extended info
+    location = State()
     bio = State()
     interests = State()
-
-    # Step 3: Photos (1-5)
     photos = State()
+    pref_target_gender = State()
+    pref_age_min = State()
+    pref_age_max = State()
+    pref_distance = State()
 
-    # Step 4: Search preferences
+
+class Filters(StatesGroup):
+    """Editing search filters from main menu (Etap 4)."""
     target_gender = State()
     age_min = State()
     age_max = State()
-    search_city = State()
+    distance = State()

@@ -1,86 +1,103 @@
 # Dating Bot 💘
 
-Telegram-бот для знакомств с микросервисной архитектурой и системой рейтинга.
+Микросервисный Telegram-бот знакомств с **прозрачным ранжированием**, гео-фильтрацией, реферальной системой и айсбрейкерами после мэтча.
 
-## Статус реализации
+## Что внутри
 
-| Сервис | Статус | Описание |
-|:-------|:-------|:---------|
-| 🤖 **Bot Service** | ✅ **Готово** | FSM регистрация, главное меню, клавиатуры |
-| 👤 **Profile Service** | ✅ **Готово** | CRUD профилей, загрузка фото в MinIO, предпочтения |
-| 📊 **Ranking Service** | 🚧 Заглушка | В разработке |
-| 💘 **Matching Service** | 🚧 Заглушка | В разработке |
-| 🔔 **Notification Service** | 🚧 Заглушка | В разработке |
-
-> 📖 **Подробная инструкция по запуску:** [`SETUP.md`](SETUP.md)
-
-## Стек технологий
-
-| Компонент | Технология |
-|:---------:|:----------:|
-| 🤖 Telegram Bot | aiogram 3.x |
-| 🌐 REST API | FastAPI |
-| 🐘 БД | PostgreSQL 16 |
-| ⚡ Кэш | Redis 7 |
-| 🐇 Очереди | RabbitMQ 3.12 |
-| ⏰ Задачи | Celery 5 |
-| 📦 S3 | MinIO |
-| 📈 Метрики | Prometheus + Grafana |
-| 🐳 Контейнеры | Docker Compose |
-| 🚀 CI/CD | GitHub Actions |
+| Сервис | Стек | Назначение |
+|:---|:---|:---|
+| 🤖 `bot-service` | aiogram 3 + Redis FSM | UI бота, регистрация, свайпы, меню |
+| 👤 `profile-service` | FastAPI + SQLAlchemy + Alembic + MinIO | CRUD анкет, фото, рефералы, REST |
+| 📊 `ranking-service` | FastAPI + Celery + Redis + PostgreSQL | 3-уровневый рейтинг, кэш ленты, Haversine |
+| 💘 `matching-service` | FastAPI + RabbitMQ consumer | Свайпы, детект мэтчей |
+| 🔔 `notification-service` | RabbitMQ consumer + Telegram API | Уведомления о мэтчах + AI-айсбрейкеры |
 
 ## Архитектура
 
-Система состоит из 5 микросервисов:
+```
+   Telegram ──► bot-service ──► profile-service (REST)
+                    │           ranking-service  (REST)
+                    │
+                    └─publish──► RabbitMQ (4 топика)
+                                       │
+              ┌────────────────────────┼─────────────────────┐
+              ▼                        ▼                     ▼
+         matching-service       ranking-service     notification-service
+         (swipe → match)        (consumers + Celery     (match → пуш +
+              │                  beat: пересчёты)          айсбрейкер)
+              └────publish match_events────► (та же шина)
 
-- **Bot Service** — интерфейс пользователя (Telegram)
-- **Profile Service** — CRUD анкет, загрузка фото
-- **Ranking Service** — 3-уровневая система рейтинга, кэширование ленты
-- **Matching Service** — обработка свайпов, определение мэтчей
-- **Notification Service** — уведомления о мэтчах
+         PostgreSQL 16    Redis 7    MinIO    Prometheus + Grafana
+         (8 таблиц)       (FSM,      (фото)   (метрики + дашборд
+                          кэш ленты)           провижионинг)
+```
 
-> Подробнее: [`docs/architecture.md`](docs/architecture.md)
+Подробно: [`docs/architecture.md`](docs/architecture.md), [`docs/services.md`](docs/services.md), [`docs/database.md`](docs/database.md).
 
-## Документация
+## Чем отличается от Дайвинчика
 
-| Документ | Описание |
-|:---------|:---------|
-| [`docs/services.md`](docs/services.md) | Описание всех сервисов, API эндпоинты |
-| [`docs/architecture.md`](docs/architecture.md) | Схема архитектуры, потоки данных |
-| [`docs/database.md`](docs/database.md) | Схема БД, ER-диаграмма, формулы рейтинга |
+1. **Прозрачная лента** — каждой карточке показывается совместимость в %, расстояние и общие интересы.
+2. **3-уровневый рейтинг** (анкета → поведение → бонусы), пересчитывается Celery beat каждые 15 мин и каждый час.
+3. **Гео-радиус** через Haversine, фильтры 5/10/25/50/100 км или ∞.
+4. **Реферальный буст** — пригласил друга, оба получили `+0.05` к combined-скору (cap 0.3).
+5. **Айсбрейкеры при мэтче** — бот автоматически шлёт обоим 3 темы для разговора, подобранные по общим интересам (шаблонно, архитектурно готово к подмене на LLM).
 
 ## Быстрый старт
 
 ```bash
-# Клонировать репозиторий
-git clone https://github.com/UsachovaUlyana/ulsu.git
+git clone <repo>
 cd ulsu
 
-# Скопировать переменные окружения
+# 1) .env с токеном бота (см. .env.example)
 cp .env.example .env
-# Заполнить TELEGRAM_BOT_TOKEN в .env
+# отредактировать TELEGRAM_BOT_TOKEN
 
-# Запустить все сервисы
+# 2) Поднять весь стек
 docker-compose up -d
+docker-compose ps   # все Up
+
+# 3) Открыть бота в Telegram → /start → пройти регистрацию
 ```
 
-## Структура проекта
+Полная инструкция — [`SETUP.md`](SETUP.md).
+
+## Стек
+
+Python 3.11, aiogram 3, FastAPI 0.115, SQLAlchemy 2.0 (async), Alembic, Celery 5,
+PostgreSQL 16, Redis 7, RabbitMQ 3.12, MinIO, Prometheus + Grafana,
+Docker Compose, GitHub Actions, JMeter.
+
+## Соответствие ТЗ
+
+См. [`docs/scoring.md`](docs/scoring.md) — таблица «пункт ТЗ → где реализовано → ссылки на код».
+
+## Структура
 
 ```
-├── docs/                          # Документация
-│   ├── services.md                # Описание сервисов
-│   ├── architecture.md            # Архитектура системы
-│   └── database.md                # Схема БД
-├── services/
-│   ├── bot-service/               # Telegram Bot
-│   ├── profile-service/           # Управление профилями
-│   ├── ranking-service/           # Рейтинги и лента
-│   ├── matching-service/          # Свайпы и мэтчи
-│   └── notification-service/      # Уведомления
+.
+├── docs/                          # архитектура, БД, scoring
 ├── infrastructure/
-│   ├── prometheus/                # Конфиг Prometheus
-│   └── grafana/                   # Конфиг Grafana
-├── .github/workflows/ci.yml      # CI/CD pipeline
-├── docker-compose.yml             # Оркестрация контейнеров
-└── .env.example                   # Шаблон переменных окружения
+│   ├── grafana/provisioning/      # dashboard.json + datasource (auto-load)
+│   ├── prometheus/prometheus.yml
+│   └── jmeter/dating_load_test.jmx
+├── services/
+│   ├── _shared/                   # общая lib: logging, rabbitmq, metrics, events
+│   ├── bot-service/               # aiogram 3
+│   ├── profile-service/           # CRUD + Alembic + MinIO
+│   ├── ranking-service/           # рейтинг + Celery + лента
+│   ├── matching-service/          # swipe → match
+│   └── notification-service/      # match → push + айсбрейкер
+├── docker-compose.yml
+├── .github/workflows/ci.yml       # lint + tests + docker build matrix
+└── .env.example
 ```
+
+## Тесты и CI
+
+- Unit-тесты для чистой логики (формулы рейтинга, айсбрейкеры, клавиатуры, реферальные коды) — `services/*/tests/`.
+- CI: ruff + pytest + docker build для всех 5 сервисов в матрице.
+- Нагрузочный сценарий JMeter — `infrastructure/jmeter/`.
+
+## Лицензия
+
+Учебный проект.

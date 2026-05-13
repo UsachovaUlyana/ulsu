@@ -1,97 +1,52 @@
-"""Telegram Bot Service — entry point."""
+from __future__ import annotations
 
 import asyncio
-import logging
-import sys
 
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
-import structlog
 
-from app.config import settings
-from app.api_client import profile_client
-from app.handlers import registration, menu
-from app.middlewares import LoggingMiddleware
+from shared.logging import configure_logging, get_logger
 
+from .api_client import api_client
+from .config import settings
+from .handlers import menu, registration
+from .middlewares import AlbumMiddleware, LoggingMiddleware
+from .swipe_publisher import publisher as swipe_publisher
 
-async def on_startup(dispatcher: Dispatcher, bot: Bot) -> None:
-    """Actions on bot startup."""
-    logger = structlog.get_logger(__name__)
-    logger.info(
-        "bot_started",
-        bot_username=(await bot.get_me()).username,
-    )
-
-
-async def on_shutdown(dispatcher: Dispatcher, bot: Bot) -> None:
-    """Actions on bot shutdown."""
-    logger = structlog.get_logger(__name__)
-    logger.info("bot_stopped")
-    await profile_client.close()
+configure_logging("bot-service", settings.log_level)
+logger = get_logger(__name__)
 
 
 async def main() -> None:
-    """Initialize and start the bot."""
-    # Configure structured logging
-    log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
-    structlog.configure(
-        processors=[
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.dev.ConsoleRenderer(),
-        ],
-        wrapper_class=structlog.make_filtering_bound_logger(log_level),
-        cache_logger_on_first_use=True,
-    )
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    storage = RedisStorage(redis=redis)
 
-    logger = structlog.get_logger(__name__)
-
-    # Initialize bot with HTML parse mode by default
     bot = Bot(
         token=settings.telegram_bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher()
+    dp = Dispatcher(storage=storage)
+    dp.update.middleware(LoggingMiddleware())
+    dp.message.middleware(AlbumMiddleware())
 
-    # Initialize Redis storage for FSM
-    redis = Redis.from_url(
-        settings.redis_url,
-        encoding="utf-8",
-        decode_responses=False,
-    )
-    fsm_storage = RedisStorage(redis=redis)
-
-    # Register startup/shutdown handlers
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
-
-    # Include routers
     dp.include_router(registration.router)
     dp.include_router(menu.router)
 
-    # Add middleware
-    dp.message.middleware(LoggingMiddleware())
-    dp.callback_query.middleware(LoggingMiddleware())
+    await swipe_publisher.connect()
 
-    # Start polling
+    me = await bot.get_me()
+    logger.info("bot_started", username=me.username)
     try:
-        logger.info("starting_polling")
-        await bot.delete_webhook(drop_pending_updates=True)
-        await dp.start_polling(bot, fsm_storage=fsm_storage)
-    except KeyboardInterrupt:
-        logger.info("keyboard_interrupt")
-    except Exception as e:
-        logger.error("polling_error", error=str(e), exc_info=True)
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        await swipe_publisher.close()
+        await api_client.close()
         await bot.session.close()
-        await redis.close()
+        await redis.aclose()
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        sys.exit(0)
+    asyncio.run(main())

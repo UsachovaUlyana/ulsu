@@ -61,3 +61,11 @@ htmlcov/
 
 # mypy
 .mypy_cache/
+
+# Agent / project files
+.claude/
+CLAUDE.md
+zadanie.md
+
+# GitHub workflows
+.github/

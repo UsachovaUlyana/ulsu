@@ -1,19 +1,22 @@
-"""SQLAlchemy database models."""
+from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
 
 from sqlalchemy import (
-    Boolean,
+    BigInteger,
+    CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
     Text,
-    ARRAY,
-    CheckConstraint,
+    UniqueConstraint,
+    func,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -22,87 +25,107 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    """User model — base entity created on /start."""
-
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False, index=True)
-    username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    referral_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, default=lambda: f"ref_{id}")
-    referred_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_active: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    username: Mapped[str | None] = mapped_column(String(64))
+    referral_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    referred_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    # Relationships
-    profile: Mapped[Optional["Profile"]] = relationship("Profile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    preferences: Mapped[Optional["Preferences"]] = relationship("Preferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    profile: Mapped["Profile | None"] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    photos: Mapped[list["Photo"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", order_by="Photo.position"
+    )
+    preferences: Mapped["Preferences | None"] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class Profile(Base):
-    """Profile model — user's dating profile/anketa."""
-
     __tablename__ = "profiles"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    age: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    gender: Mapped[str] = mapped_column(String(20), nullable=False)
-    city: Mapped[str] = mapped_column(String(100), nullable=False)
-    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    interests: Mapped[Optional[List[str]]] = mapped_column(ARRAY(String), nullable=True)
-    is_complete: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
     __table_args__ = (
-        CheckConstraint("age >= 18 AND age <= 100", name="check_age_range"),
+        CheckConstraint("age >= 18 AND age <= 100", name="ck_profile_age"),
+        Index("ix_profiles_gender_age", "gender", "age"),
     )
 
-    # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="profile")
-    photos: Mapped[List["Photo"]] = relationship("Photo", back_populates="profile", cascade="all, delete-orphan", order_by="Photo.upload_order")
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    name: Mapped[str] = mapped_column(String(64))
+    age: Mapped[int] = mapped_column(SmallInteger)
+    gender: Mapped[str] = mapped_column(String(16))
+    city: Mapped[str | None] = mapped_column(String(64))
+    bio: Mapped[str | None] = mapped_column(Text)
+    interests: Mapped[list[str] | None] = mapped_column(ARRAY(String(32)))
+    lat: Mapped[float | None] = mapped_column(Float)
+    lon: Mapped[float | None] = mapped_column(Float)
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="profile")
 
 
 class Photo(Base):
-    """Photo model — user's uploaded photos stored in MinIO."""
-
     __tablename__ = "photos"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=False, index=True)
-    s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
-    s3_bucket: Mapped[str] = mapped_column(String(100), nullable=False, default="photos")
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
-    upload_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    s3_key: Mapped[str] = mapped_column(String(256))
+    position: Mapped[int] = mapped_column(SmallInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
-    # Relationships
-    profile: Mapped["Profile"] = relationship("Profile", back_populates="photos")
+    user: Mapped[User] = relationship(back_populates="photos")
 
 
 class Preferences(Base):
-    """Preferences model — user's search criteria."""
-
     __tablename__ = "preferences"
+    __table_args__ = (CheckConstraint("age_min <= age_max", name="ck_pref_age_range"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
-    target_gender: Mapped[str] = mapped_column(String(20), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    target_gender: Mapped[str] = mapped_column(String(16))
     age_min: Mapped[int] = mapped_column(SmallInteger, default=18)
-    age_max: Mapped[int] = mapped_column(SmallInteger, default=100)
-    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    max_distance: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        CheckConstraint("age_min >= 18", name="check_age_min"),
-        CheckConstraint("age_max <= 100", name="check_age_max"),
+    age_max: Mapped[int] = mapped_column(SmallInteger, default=99)
+    max_distance_km: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="preferences")
+    user: Mapped[User] = relationship(back_populates="preferences")
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+    __table_args__ = (
+        CheckConstraint("inviter_id <> invitee_id", name="ck_referral_self"),
+        UniqueConstraint("invitee_id", name="uq_referral_invitee"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    inviter_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    invitee_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE")
+    )
+    bonus_value: Mapped[float] = mapped_column(Float, default=0.05)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

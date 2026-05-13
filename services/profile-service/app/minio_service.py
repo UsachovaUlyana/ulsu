@@ -1,85 +1,72 @@
-"""MinIO (S3) service for photo storage."""
+from __future__ import annotations
 
 import io
 import uuid
-from typing import Optional
+from datetime import timedelta
 
 from minio import Minio
 from minio.error import S3Error
-import structlog
 
-from app.config import settings
+from shared.logging import get_logger
 
-logger = structlog.get_logger(__name__)
+from .config import settings
 
-# Initialize MinIO client
-minio_client = Minio(
-    settings.minio_endpoint,
-    access_key=settings.minio_access_key,
-    secret_key=settings.minio_secret_key,
-    secure=False,  # HTTP for local development
-)
+logger = get_logger(__name__)
 
 
-def _ensure_bucket() -> None:
-    """Create bucket if it doesn't exist."""
-    try:
-        if not minio_client.bucket_exists(settings.minio_bucket):
-            minio_client.make_bucket(settings.minio_bucket)
-            logger.info("bucket_created", bucket=settings.minio_bucket)
-    except S3Error as e:
-        logger.error("bucket_creation_failed", error=str(e))
-        raise
+class MinioService:
+    def __init__(self) -> None:
+        self.client = Minio(
+            settings.minio_endpoint,
+            access_key=settings.minio_access_key,
+            secret_key=settings.minio_secret_key,
+            secure=settings.minio_secure,
+        )
+        self.bucket = settings.minio_bucket
+        self._ensure_bucket()
 
+    def _ensure_bucket(self) -> None:
+        try:
+            if not self.client.bucket_exists(self.bucket):
+                self.client.make_bucket(self.bucket)
+                logger.info("minio_bucket_created", bucket=self.bucket)
+        except S3Error:
+            logger.exception("minio_bucket_check_failed", bucket=self.bucket)
+            raise
 
-def generate_s3_key(filename: str) -> str:
-    """Generate a unique S3 key for a photo."""
-    ext = filename.rsplit(".", 1)[-1] if "." in filename else "jpg"
-    unique_id = uuid.uuid4().hex
-    return f"photos/{unique_id}.{ext}"
-
-
-async def upload_photo(photo_bytes: bytes, filename: str) -> str:
-    """Upload a photo to MinIO and return the S3 key."""
-    _ensure_bucket()
-
-    s3_key = generate_s3_key(filename)
-    content_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
-
-    try:
-        minio_client.put_object(
-            bucket_name=settings.minio_bucket,
-            object_name=s3_key,
-            data=io.BytesIO(photo_bytes),
-            length=len(photo_bytes),
+    def upload(
+        self, telegram_id: int, data: bytes, content_type: str = "image/jpeg"
+    ) -> str:
+        ext = "jpg" if "jpeg" in content_type else content_type.split("/")[-1]
+        key = f"users/{telegram_id}/{uuid.uuid4().hex}.{ext}"
+        self.client.put_object(
+            self.bucket,
+            key,
+            io.BytesIO(data),
+            length=len(data),
             content_type=content_type,
         )
-        logger.info("photo_uploaded_to_s3", s3_key=s3_key, size=len(photo_bytes))
-        return s3_key
-    except S3Error as e:
-        logger.error("s3_upload_failed", error=str(e))
-        raise
+        return key
 
+    def delete(self, key: str) -> None:
+        try:
+            self.client.remove_object(self.bucket, key)
+        except S3Error:
+            logger.exception("minio_delete_failed", key=key)
 
-async def delete_photo(s3_key: str) -> None:
-    """Delete a photo from MinIO."""
-    try:
-        minio_client.remove_object(bucket_name=settings.minio_bucket, object_name=s3_key)
-        logger.info("photo_deleted_from_s3", s3_key=s3_key)
-    except S3Error as e:
-        logger.error("s3_delete_failed", error=str(e))
-        raise
-
-
-async def get_presigned_url(s3_key: str, expires_seconds: int = 3600) -> Optional[str]:
-    """Generate a presigned URL for temporary access to a photo."""
-    try:
-        url = minio_client.presigned_get_object(
-            bucket_name=settings.minio_bucket,
-            object_name=s3_key,
-            expires=expires_seconds,
+    def presigned_url(self, key: str) -> str:
+        return self.client.presigned_get_object(
+            self.bucket,
+            key,
+            expires=timedelta(seconds=settings.presigned_url_ttl_seconds),
         )
-        return url
-    except S3Error as e:
-        logger.error("presigned_url_failed", s3_key=s3_key, error=str(e))
-        return None
+
+
+_singleton: MinioService | None = None
+
+
+def get_minio() -> MinioService:
+    global _singleton
+    if _singleton is None:
+        _singleton = MinioService()
+    return _singleton

@@ -13,7 +13,7 @@ services:
       POSTGRES_USER: dating_user
       POSTGRES_PASSWORD: dating_pass
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -104,6 +104,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       - prometheus
     networks:
@@ -115,8 +116,8 @@ services:
 
   bot-service:
     build:
-      context: ./services/bot-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/bot-service/Dockerfile
     container_name: dating-bot-service
     env_file:
       - .env
@@ -139,8 +140,8 @@ services:
 
   profile-service:
     build:
-      context: ./services/profile-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/profile-service/Dockerfile
     container_name: dating-profile-service
     ports:
       - "8001:8001"
@@ -163,8 +164,8 @@ services:
 
   ranking-service:
     build:
-      context: ./services/ranking-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ranking-service/Dockerfile
     container_name: dating-ranking-service
     ports:
       - "8002:8002"
@@ -186,8 +187,8 @@ services:
 
   celery-worker:
     build:
-      context: ./services/ranking-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ranking-service/Dockerfile
     container_name: dating-celery-worker
     command: celery -A app.celery_app worker --loglevel=info
     environment:
@@ -205,8 +206,8 @@ services:
 
   celery-beat:
     build:
-      context: ./services/ranking-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ranking-service/Dockerfile
     container_name: dating-celery-beat
     command: celery -A app.celery_app beat --loglevel=info
     environment:
@@ -224,8 +225,8 @@ services:
 
   matching-service:
     build:
-      context: ./services/matching-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/matching-service/Dockerfile
     container_name: dating-matching-service
     ports:
       - "8003:8003"
@@ -242,8 +243,8 @@ services:
 
   notification-service:
     build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: dating-notification-service
     env_file:
       - .env

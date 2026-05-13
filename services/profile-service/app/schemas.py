@@ -1,142 +1,83 @@
-"""Pydantic schemas for request/response validation."""
+from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-
-# ============================================================
-# User schemas
-# ============================================================
+Gender = Literal["male", "female", "other"]
+TargetGender = Literal["male", "female", "any"]
 
 
 class UserCreate(BaseModel):
-    """Schema for creating a user (from Bot Service)."""
-
     telegram_id: int
-    username: Optional[str] = None
+    username: str | None = None
+    referral_code_used: str | None = Field(default=None, max_length=16)
 
 
 class UserResponse(BaseModel):
-    """Schema for user response."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     telegram_id: int
-    username: Optional[str] = None
+    username: str | None
     referral_code: str
-    is_active: bool
+    referred_by: int | None
     created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
-# ============================================================
-# Profile schemas
-# ============================================================
+class ProfileUpsert(BaseModel):
+    name: str = Field(min_length=2, max_length=64)
+    age: int = Field(ge=18, le=100)
+    gender: Gender
+    city: str | None = Field(default=None, max_length=64)
+    bio: str | None = Field(default=None, max_length=2000)
+    interests: list[str] | None = Field(default=None, max_length=20)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
 
 
-class ProfileCreate(BaseModel):
-    """Schema for creating a profile."""
-
-    name: str = Field(..., min_length=2, max_length=100)
-    age: int = Field(..., ge=18, le=100)
-    gender: str = Field(..., pattern="^(male|female|other)$")
-    city: str = Field(..., min_length=2, max_length=100)
-    bio: Optional[str] = Field(None, max_length=500)
-    interests: Optional[List[str]] = None
-
-
-class ProfileUpdate(BaseModel):
-    """Schema for updating a profile."""
-
-    name: Optional[str] = Field(None, min_length=2, max_length=100)
-    age: Optional[int] = Field(None, ge=18, le=100)
-    gender: Optional[str] = Field(None, pattern="^(male|female|other)$")
-    city: Optional[str] = Field(None, min_length=2, max_length=100)
-    bio: Optional[str] = Field(None, max_length=500)
-    interests: Optional[List[str]] = None
-    is_complete: Optional[bool] = None
-
-
-class ProfileResponse(BaseModel):
-    """Schema for profile response."""
-
-    id: int
+class ProfileResponse(ProfileUpsert):
+    model_config = ConfigDict(from_attributes=True)
     user_id: int
-    name: str
-    age: int
-    gender: str
-    city: str
-    bio: Optional[str] = None
-    interests: Optional[List[str]] = None
-    is_complete: bool
-    created_at: datetime
+    last_active_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-# ============================================================
-# Photo schemas
-# ============================================================
 
 
 class PhotoResponse(BaseModel):
-    """Schema for photo response."""
-
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    profile_id: int
     s3_key: str
-    s3_bucket: str
-    is_primary: bool
-    upload_order: int
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
+    position: int
+    url: str | None = None  # populated on read with presigned URL
 
 
-# ============================================================
-# Preferences schemas
-# ============================================================
+class PreferencesUpsert(BaseModel):
+    target_gender: TargetGender
+    age_min: int = Field(ge=18, le=100, default=18)
+    age_max: int = Field(ge=18, le=100, default=99)
+    max_distance_km: int | None = Field(default=None, ge=1, le=20000)
 
 
-class PreferencesUpdate(BaseModel):
-    """Schema for updating search preferences."""
-
-    target_gender: str = Field(..., pattern="^(male|female|any)$")
-    age_min: int = Field(18, ge=18, le=100)
-    age_max: int = Field(100, ge=18, le=100)
-    city: Optional[str] = None
-    max_distance: Optional[int] = None
-
-
-class PreferencesResponse(BaseModel):
-    """Schema for preferences response."""
-
-    id: int
+class PreferencesResponse(PreferencesUpsert):
+    model_config = ConfigDict(from_attributes=True)
     user_id: int
-    target_gender: str
-    age_min: int
-    age_max: int
-    city: Optional[str] = None
-    max_distance: Optional[int] = None
-    created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-# ============================================================
-# Full profile response (user + profile + photos + preferences)
-# ============================================================
 
 
 class FullProfileResponse(BaseModel):
-    """Complete profile data with user info, photos, and preferences."""
-
     user: UserResponse
-    profile: Optional[ProfileResponse] = None
-    photos: List[PhotoResponse] = []
-    preferences: Optional[PreferencesResponse] = None
+    profile: ProfileResponse | None
+    photos: list[PhotoResponse]
+    preferences: PreferencesResponse | None
+
+
+class ReferralApply(BaseModel):
+    inviter_code: str = Field(min_length=4, max_length=16)
+    invitee_telegram_id: int
+
+
+class ReferralResponse(BaseModel):
+    inviter_id: int
+    invitee_id: int
+    bonus_value: float

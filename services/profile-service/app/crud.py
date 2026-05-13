@@ -1,190 +1,155 @@
-"""CRUD operations for users, profiles, photos, and preferences."""
+from __future__ import annotations
 
-import uuid
-from datetime import datetime
-from typing import List, Optional
+import secrets
+import string
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-import structlog
 
-from app.models import User, Profile, Photo, Preferences
-from app.schemas import ProfileUpdate, PreferencesUpdate
-
-logger = structlog.get_logger(__name__)
+from . import models, schemas
 
 
-# ============================================================
-# User CRUD
-# ============================================================
+def _generate_referral_code(length: int = 8) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    # Avoid confusable chars
+    alphabet = alphabet.translate(str.maketrans("", "", "O0I1L"))
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-async def create_user(db: AsyncSession, telegram_id: int, username: Optional[str] = None) -> User:
-    """Create a new user with unique referral code."""
-    referral_code = f"ref_{uuid.uuid4().hex[:8]}"
+async def get_user_by_telegram_id(
+    session: AsyncSession, telegram_id: int
+) -> models.User | None:
+    stmt = select(models.User).where(models.User.telegram_id == telegram_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
 
-    user = User(
-        telegram_id=telegram_id,
-        username=username,
-        referral_code=referral_code,
+
+async def get_user_by_referral_code(
+    session: AsyncSession, code: str
+) -> models.User | None:
+    stmt = select(models.User).where(models.User.referral_code == code)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def create_user(
+    session: AsyncSession, payload: schemas.UserCreate
+) -> models.User:
+    inviter_id: int | None = None
+    if payload.referral_code_used:
+        inviter = await get_user_by_referral_code(session, payload.referral_code_used)
+        if inviter:
+            inviter_id = inviter.id
+
+    # Generate unique referral code with retries
+    for _ in range(5):
+        code = _generate_referral_code()
+        if not await get_user_by_referral_code(session, code):
+            break
+    else:
+        raise RuntimeError("could not allocate unique referral code")
+
+    user = models.User(
+        telegram_id=payload.telegram_id,
+        username=payload.username,
+        referral_code=code,
+        referred_by=inviter_id,
     )
-    db.add(user)
-    await db.flush()
-    await db.refresh(user)
-
-    logger.info("user_created", telegram_id=telegram_id, user_id=user.id)
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
     return user
 
 
-async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optional[User]:
-    """Get user by Telegram ID."""
-    result = await db.execute(select(User).where(User.telegram_id == telegram_id))
-    return result.scalar_one_or_none()
-
-
-async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
-    """Get user by internal ID."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    return result.scalar_one_or_none()
-
-
-# ============================================================
-# Profile CRUD
-# ============================================================
-
-
-async def create_or_update_profile(
-    db: AsyncSession, user_id: int, profile_data: ProfileUpdate
-) -> Profile:
-    """Create or update user profile."""
-    # Get user
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise ValueError(f"User {user_id} not found")
-
-    # Check if profile exists
-    result = await db.execute(select(Profile).where(Profile.user_id == user_id))
-    profile = result.scalar_one_or_none()
-
-    if profile:
-        # Update existing
-        update_data = profile_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(profile, field, value)
-        profile.updated_at = datetime.utcnow()
-        logger.info("profile_updated", user_id=user_id)
-    else:
-        # Create new
-        profile = Profile(
-            user_id=user_id,
-            **profile_data.model_dump(),
+async def get_full_profile(
+    session: AsyncSession, telegram_id: int
+) -> models.User | None:
+    stmt = (
+        select(models.User)
+        .where(models.User.telegram_id == telegram_id)
+        .options(
+            selectinload(models.User.profile),
+            selectinload(models.User.photos),
+            selectinload(models.User.preferences),
         )
-        db.add(profile)
-        logger.info("profile_created", user_id=user_id)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
 
-    await db.flush()
-    await db.refresh(profile)
+
+async def upsert_profile(
+    session: AsyncSession, user: models.User, payload: schemas.ProfileUpsert
+) -> models.Profile:
+    existing = await session.get(models.Profile, user.id)
+    if existing is None:
+        profile = models.Profile(user_id=user.id, **payload.model_dump())
+        session.add(profile)
+    else:
+        for k, v in payload.model_dump().items():
+            setattr(existing, k, v)
+        profile = existing
+    await session.commit()
+    await session.refresh(profile)
     return profile
 
 
-async def get_profile_by_user_id(db: AsyncSession, telegram_id: int) -> Optional[Profile]:
-    """Get profile by user's Telegram ID."""
-    result = await db.execute(
-        select(Profile)
-        .join(User)
-        .where(User.telegram_id == telegram_id)
-        .options(selectinload(Profile.photos))
-    )
-    return result.scalar_one_or_none()
+async def upsert_preferences(
+    session: AsyncSession, user: models.User, payload: schemas.PreferencesUpsert
+) -> models.Preferences:
+    existing = await session.get(models.Preferences, user.id)
+    if existing is None:
+        prefs = models.Preferences(user_id=user.id, **payload.model_dump())
+        session.add(prefs)
+    else:
+        for k, v in payload.model_dump().items():
+            setattr(existing, k, v)
+        prefs = existing
+    await session.commit()
+    await session.refresh(prefs)
+    return prefs
 
 
-# ============================================================
-# Photo CRUD
-# ============================================================
-
-
-async def create_photo(
-    db: AsyncSession,
-    profile_id: int,
-    s3_key: str,
-    s3_bucket: str = "photos",
-    is_primary: bool = False,
-) -> Photo:
-    """Create a new photo record."""
-    # Get upload order
-    result = await db.execute(
-        select(Photo).where(Photo.profile_id == profile_id).order_by(Photo.upload_order.desc()).limit(1)
-    )
-    last_photo = result.scalar_one_or_none()
-    upload_order = (last_photo.upload_order + 1) if last_photo else 1
-
-    # If this is primary, unset other primary photos
-    if is_primary:
-        await db.execute(
-            update(Photo).where(Photo.profile_id == profile_id).values(is_primary=False)
+async def add_photo(
+    session: AsyncSession, user: models.User, s3_key: str
+) -> models.Photo:
+    # position = current count
+    existing = (
+        await session.execute(
+            select(models.Photo).where(models.Photo.user_id == user.id)
         )
-
-    photo = Photo(
-        profile_id=profile_id,
-        s3_key=s3_key,
-        s3_bucket=s3_bucket,
-        is_primary=is_primary,
-        upload_order=upload_order,
-    )
-    db.add(photo)
-    await db.flush()
-    await db.refresh(photo)
-
-    logger.info("photo_created", profile_id=profile_id, photo_id=photo.id)
+    ).scalars().all()
+    photo = models.Photo(user_id=user.id, s3_key=s3_key, position=len(existing))
+    session.add(photo)
+    await session.commit()
+    await session.refresh(photo)
     return photo
 
 
-async def get_photos_by_profile_id(db: AsyncSession, profile_id: int) -> List[Photo]:
-    """Get all photos for a profile."""
-    result = await db.execute(
-        select(Photo).where(Photo.profile_id == profile_id).order_by(Photo.upload_order)
-    )
-    return list(result.scalars().all())
+async def delete_photo(
+    session: AsyncSession, user: models.User, photo_id: int
+) -> models.Photo | None:
+    photo = await session.get(models.Photo, photo_id)
+    if photo is None or photo.user_id != user.id:
+        return None
+    await session.delete(photo)
+    await session.commit()
+    return photo
 
 
-# ============================================================
-# Preferences CRUD
-# ============================================================
-
-
-async def create_or_update_preferences(
-    db: AsyncSession, user_id: int, preferences_data: PreferencesUpdate
-) -> Preferences:
-    """Create or update user search preferences."""
-    result = await db.execute(select(Preferences).where(Preferences.user_id == user_id))
-    preferences = result.scalar_one_or_none()
-
-    if preferences:
-        # Update existing
-        update_data = preferences_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(preferences, field, value)
-        preferences.updated_at = datetime.utcnow()
-        logger.info("preferences_updated", user_id=user_id)
-    else:
-        # Create new
-        preferences = Preferences(
-            user_id=user_id,
-            **preferences_data.model_dump(),
+async def create_referral(
+    session: AsyncSession, inviter_id: int, invitee_id: int, bonus: float = 0.05
+) -> models.Referral | None:
+    if inviter_id == invitee_id:
+        return None
+    existing = (
+        await session.execute(
+            select(models.Referral).where(models.Referral.invitee_id == invitee_id)
         )
-        db.add(preferences)
-        logger.info("preferences_created", user_id=user_id)
-
-    await db.flush()
-    await db.refresh(preferences)
-    return preferences
-
-
-async def get_preferences_by_user_id(db: AsyncSession, telegram_id: int) -> Optional[Preferences]:
-    """Get preferences by user's Telegram ID."""
-    result = await db.execute(
-        select(Preferences).join(User).where(User.telegram_id == telegram_id)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return None
+    ref = models.Referral(
+        inviter_id=inviter_id, invitee_id=invitee_id, bonus_value=bonus
     )
-    return result.scalar_one_or_none()
+    session.add(ref)
+    await session.commit()
+    await session.refresh(ref)
+    return ref

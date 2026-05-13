@@ -1,0 +1,6 @@
+structlog>=24.4.0
+aio-pika>=9.5.0
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+prometheus-client>=0.21.0
+prometheus-fastapi-instrumentator>=7.0.0

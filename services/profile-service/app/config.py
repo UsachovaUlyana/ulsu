@@ -1,29 +1,18 @@
-"""Configuration for Profile Service."""
+from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.settings import CommonSettings
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+class Settings(CommonSettings):
+    database_url: str = (
+        "postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot"
     )
-
-    # Database
-    database_url: str = "postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot"
-
-    # MinIO (S3)
     minio_endpoint: str = "minio:9000"
     minio_access_key: str = "minio_user"
     minio_secret_key: str = "minio_pass"
     minio_bucket: str = "photos"
-
-    # RabbitMQ
-    rabbitmq_url: str = "amqp://dating_user:dating_pass@rabbitmq:5672/"
-
-    # Logging
-    log_level: str = "INFO"
+    minio_secure: bool = False
+    presigned_url_ttl_seconds: int = 3600
 
 
 settings = Settings()
