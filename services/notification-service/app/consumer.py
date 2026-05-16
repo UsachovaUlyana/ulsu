@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-from shared.events import EXCHANGE_MATCHES, EXCHANGE_SWIPES, RK_LIKE_RECEIVED, RK_MATCH_CREATED
+from shared.events import (
+    EXCHANGE_MATCHES,
+    EXCHANGE_REFERRALS,
+    EXCHANGE_SWIPES,
+    RK_LIKE_RECEIVED,
+    RK_MATCH_CREATED,
+    RK_REFERRAL_APPLIED,
+)
 from shared.logging import get_logger
-from shared.metrics import likes_notified_total
+from shared.metrics import likes_notified_total, referrals_notified_total
 from shared.rabbitmq import RabbitMQConsumer
 
 from .config import settings
@@ -62,6 +69,18 @@ async def handle_like_received(payload: dict) -> None:
     logger.info("like_notified", target_tid=target_tid)
 
 
+async def handle_referral_event(payload: dict) -> None:
+    inviter_tid = int(payload["inviter_telegram_id"])
+    bonus = float(payload.get("bonus_value", 0.05))
+    msg = (
+        f"🎉 По твоей реферальной ссылке зарегистрировался новый пользователь!\n"
+        f"📈 Тебе начислен бонус к рейтингу: +{bonus:.0%}."
+    )
+    await tg_client.send_message(inviter_tid, msg)
+    referrals_notified_total.inc()
+    logger.info("referral_notified", inviter_tid=inviter_tid, bonus=bonus)
+
+
 def make_consumer() -> RabbitMQConsumer:
     return RabbitMQConsumer(
         url=settings.rabbitmq_url,
@@ -79,4 +98,14 @@ def make_like_consumer() -> RabbitMQConsumer:
         queue_name="notification.like_events",
         routing_keys=[RK_LIKE_RECEIVED],
         handler=handle_like_received,
+    )
+
+
+def make_referral_consumer() -> RabbitMQConsumer:
+    return RabbitMQConsumer(
+        url=settings.rabbitmq_url,
+        exchange=EXCHANGE_REFERRALS,
+        queue_name="notification.referral_events",
+        routing_keys=[RK_REFERRAL_APPLIED],
+        handler=handle_referral_event,
     )

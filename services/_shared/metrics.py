@@ -36,6 +36,25 @@ likes_notified_total = Counter(
     "dating_likes_notified_total",
     "Total one-way like notifications sent",
 )
+referrals_notified_total = Counter(
+    "dating_referrals_notified_total",
+    "Total referral bonus notifications sent",
+)
+circuit_open_total = Counter(
+    "dating_circuit_open_total",
+    "Total circuit breaker openings",
+    ["service"],
+)
+circuit_short_circuit_total = Counter(
+    "dating_circuit_short_circuit_total",
+    "Total blocked calls due to open/half-open circuit",
+    ["service"],
+)
+circuit_half_open_total = Counter(
+    "dating_circuit_half_open_total",
+    "Total transitions to half-open state",
+    ["service"],
+)
 
 feed_response_seconds = Histogram(
     "dating_feed_response_seconds",

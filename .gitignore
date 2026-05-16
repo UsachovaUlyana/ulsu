@@ -66,3 +66,9 @@ htmlcov/
 .claude/
 CLAUDE.md
 zadanie.md
+
+# Large model files
+services/bot-service/models/model.bin
+services/ranking-service/models/model.txt
+services/ranking-service/models/model.zip
+services/ranking-service/models/model.bin

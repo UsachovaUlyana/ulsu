@@ -100,6 +100,7 @@ class Preferences(Base):
     target_gender: Mapped[str] = mapped_column(String(16))
     age_min: Mapped[int] = mapped_column(SmallInteger, default=18)
     age_max: Mapped[int] = mapped_column(SmallInteger, default=99)
+    search_city: Mapped[str | None] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

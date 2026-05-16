@@ -14,6 +14,7 @@ from shared.logging import get_logger
 from shared.metrics import feed_response_seconds
 
 from .config import settings
+from .embeddings import semantic_interest_boost
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,7 @@ async def _resolve_user(session: AsyncSession, telegram_id: int) -> dict | None:
         text(
             """
             SELECT u.id, u.telegram_id, p.city, p.gender, p.age,
-                   pr.target_gender, pr.age_min, pr.age_max,
+                   pr.target_gender, pr.age_min, pr.age_max, pr.search_city,
                    p.interests,
                    COALESCE(rv.combined_score, 0) AS combined_score
               FROM users u
@@ -66,6 +67,7 @@ async def _query_candidates(
         "age_min": age_min,
         "age_max": age_max,
         "target_gender": target_gender,
+        "search_city": viewer.get("search_city"),
     }
     if exclude_telegram_id is not None:
         extra_where = "AND u.telegram_id <> :exclude_tid"
@@ -93,8 +95,8 @@ async def _query_candidates(
            AND p.age BETWEEN :age_min AND :age_max
            AND (:target_gender = 'any' OR p.gender = :target_gender OR :target_gender IS NULL)
            AND (
-               (SELECT city FROM profiles WHERE user_id = :viewer_id) IS NULL
-               OR LOWER(p.city) = LOWER((SELECT city FROM profiles WHERE user_id = :viewer_id))
+               CAST(:search_city AS VARCHAR) IS NULL
+               OR LOWER(p.city) = LOWER(:search_city)
            )
            AND NOT EXISTS (
                SELECT 1 FROM swipes s
@@ -112,25 +114,11 @@ async def _query_candidates(
     return rows
 
 
-def _interest_overlap_boost(viewer_interests, candidate_interests) -> float:
-    if not viewer_interests or not candidate_interests:
-        return 0.0
-    a = {x.lower() for x in viewer_interests}
-    b = {x.lower() for x in candidate_interests}
-    overlap = len(a & b)
-    if not overlap:
-        return 0.0
-    return min(0.15, overlap * 0.05)
-
-
 def _personalised_score(viewer: dict, candidate: dict) -> float:
-    viewer_score = float(viewer.get("combined_score") or 0.0)
-    candidate_score = float(candidate.get("combined_score") or 0.0)
-    base = (viewer_score + candidate_score) / 2.0
-    overlap = _interest_overlap_boost(
+    overlap = semantic_interest_boost(
         viewer.get("interests"), candidate.get("interests")
     )
-    return base + overlap
+    return min(1.0, max(0.0, overlap))
 
 
 def _serialize(c: dict) -> dict:
@@ -147,7 +135,8 @@ def _serialize(c: dict) -> dict:
             "bio": c.get("bio"),
             "interests": c.get("interests"),
         },
-        "compatibility": round(min(1.0, max(0.0, c["personalised"])), 4),
+        "compatibility": round(c["personalised"], 4),
+        "combined_score": float(c.get("combined_score") or 0),
         "primary_score": float(c.get("primary_score") or 0),
         "peer_rating": {
             "peer_avg": round(peer_avg, 2) if peer_count > 0 else None,
@@ -167,22 +156,26 @@ async def get_next_candidate(
     redis = get_redis()
     key = _cache_key(viewer["id"])
 
+    # Helper to peek the top candidate without removing it
+    async def _peek_top():
+        batch = await redis.zrevrange(key, 0, 0)
+        if batch:
+            return batch[0]
+        return None
+
     # Cache hit?
-    raw = await redis.zpopmax(key, count=1)
-    if raw:
-        member, _score = raw[0]
+    member = await _peek_top()
+    if member:
         try:
             cached = json.loads(member)
-            # If the cached candidate matches exclude_telegram_id, skip it
+            # If the cached candidate matches exclude_telegram_id, remove it and peek again
             if exclude_telegram_id is not None and cached.get("telegram_id") == exclude_telegram_id:
                 await redis.zrem(key, member)
-                raw = await redis.zpopmax(key, count=1)
-                if raw:
-                    member, _score = raw[0]
-                    cached = json.loads(member)
-                else:
-                    # Cache empty after exclusion — fall through to miss-path
+                member = await _peek_top()
+                if member is None:
                     cached = None
+                else:
+                    cached = json.loads(member)
             if cached is not None:
                 feed_response_seconds.observe(time.perf_counter() - start)
                 return cached
@@ -200,7 +193,7 @@ async def get_next_candidate(
         feed_response_seconds.observe(time.perf_counter() - start)
         return None
 
-    # Populate the cache and pop the top one
+    # Populate the cache
     pipe = redis.pipeline()
     for c in top:
         member = json.dumps(_serialize(c), ensure_ascii=False, default=str)
@@ -209,12 +202,9 @@ async def get_next_candidate(
     pipe.expire(key, settings.feed_cache_ttl_seconds)
     await pipe.execute()
 
-    # Pop the top scored — same logic as cache-hit path
-    raw = await redis.zpopmax(key, count=1)
+    # Return top scored without removing it
+    member = await _peek_top()
     feed_response_seconds.observe(time.perf_counter() - start)
-    if not raw:
+    if member is None:
         return None
-    member, _ = raw[0]
     return json.loads(member)
-
-

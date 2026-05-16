@@ -67,7 +67,16 @@ def behavioral_score(
 def peer_score_formula(peer_avg: float | None, peer_count: int) -> float:
     if peer_avg is None or peer_count == 0:
         return 0.0
-    peer_normalized = (peer_avg - 1.0) / 4.0
+
+    # Bayesian smoothing so 1-2 reviews don't swing the score too hard.
+    smoothed_avg = (
+        peer_avg * peer_count
+        + settings.peer_prior_mean * settings.peer_prior_weight
+    ) / (peer_count + settings.peer_prior_weight)
+
+    # 3.0 is neutral. <3 decreases ranking, >3 increases it.
+    peer_normalized = (smoothed_avg - 3.0) / 2.0
+    peer_normalized = max(-1.0, min(1.0, peer_normalized))
     dampening = min(peer_count / settings.peer_dampening_threshold, 1.0)
     return peer_normalized * dampening
 
@@ -78,10 +87,30 @@ def combined_score(
     referral_bonus: float,
     peer_score: float = 0.0,
 ) -> float:
-    bonus = min(referral_bonus, settings.referral_bonus_cap)
-    return (
-        settings.w_combined_l1 * primary
-        + settings.w_combined_l2 * behavioral
-        + settings.w_combined_referral * bonus
-        + settings.w_combined_peer * peer_score
+    primary_norm = _cap(primary)
+    behavioral_norm = _cap(behavioral)
+    peer_norm = _cap(peer_score)
+    bonus_capped = _cap(referral_bonus, settings.referral_bonus_cap)
+    if settings.referral_bonus_cap > 0:
+        referral_norm = bonus_capped / settings.referral_bonus_cap
+    else:
+        referral_norm = 0.0
+
+    score = (
+        settings.combined_profile_part_max * primary_norm
+        + settings.combined_behavioral_part_max * behavioral_norm
+        + settings.combined_peer_part_max * peer_norm
+        + settings.combined_referral_part_max * referral_norm
     )
+    return _cap(score, settings.combined_score_max)
+
+
+def combined_after_review(
+    *,
+    previous_combined: float,
+    current_combined: float,
+    review_score: float,
+) -> float:
+    if review_score >= settings.good_review_threshold:
+        return max(previous_combined, current_combined)
+    return current_combined

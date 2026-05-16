@@ -31,14 +31,20 @@ async def emit_profile_deleted(user_id: int, telegram_id: int) -> None:
 
 
 async def emit_referral_applied(
-    inviter_id: int, invitee_id: int, bonus_value: float
+    inviter_id: int,
+    inviter_telegram_id: int,
+    invitee_id: int,
+    invitee_telegram_id: int,
+    bonus_value: float,
 ) -> None:
     await publisher.publish(
         EXCHANGE_REFERRALS,
         RK_REFERRAL_APPLIED,
         {
             "inviter_id": inviter_id,
+            "inviter_telegram_id": inviter_telegram_id,
             "invitee_id": invitee_id,
+            "invitee_telegram_id": invitee_telegram_id,
             "bonus_value": bonus_value,
         },
     )

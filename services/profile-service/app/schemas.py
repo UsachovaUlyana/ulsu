@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Gender = Literal["male", "female", "other"]
 TargetGender = Literal["male", "female", "any"]
@@ -34,6 +34,14 @@ class ProfileUpsert(BaseModel):
     bio: str | None = Field(default=None, max_length=2000)
     interests: list[str] | None = Field(default=None, max_length=20)
 
+    @field_validator("city", mode="before")
+    @classmethod
+    def _normalize_city(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            v = v.strip()
+            return v.lower() if v else None
+        return v
+
 
 class ProfileResponse(ProfileUpsert):
     model_config = ConfigDict(from_attributes=True)
@@ -54,6 +62,15 @@ class PreferencesUpsert(BaseModel):
     target_gender: TargetGender
     age_min: int = Field(ge=18, le=100, default=18)
     age_max: int = Field(ge=18, le=100, default=99)
+    search_city: str | None = Field(default=None, max_length=64)
+
+    @field_validator("search_city", mode="before")
+    @classmethod
+    def _normalize_search_city(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            v = v.strip()
+            return v.lower() if v else None
+        return v
 
 
 class PreferencesResponse(PreferencesUpsert):

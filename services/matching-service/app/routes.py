@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,15 @@ logger = get_logger(__name__)
 class ReviewPayload(BaseModel):
     reviewer_telegram_id: int
     reviewee_telegram_id: int
-    score: int = Field(..., ge=1, le=5)
+    score: float = Field(..., ge=1.0, le=5.0)
+
+    @field_validator("score")
+    @classmethod
+    def validate_step(cls, value: float) -> float:
+        scaled = round(value * 10)
+        if abs(value * 10 - scaled) > 1e-9:
+            raise ValueError("score must use 0.1 step")
+        return scaled / 10
 
 
 @router.get("/matches/{telegram_id}")

@@ -5,6 +5,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from app.handlers import registration as reg
+from app.fsm import Registration
+
+from tests.dummy_i18n import DummyI18n
+
+i18n = DummyI18n()
 
 
 class DummyState:
@@ -49,7 +54,7 @@ class DummyCallback:
         return None
 
 
-def test_reg_pref_age_preset_completes_and_saves_preferences(monkeypatch):
+def test_reg_pref_age_preset_moves_to_search_city(monkeypatch):
     fake_api = SimpleNamespace(
         upsert_preferences=AsyncMock(),
         apply_referral=AsyncMock(),
@@ -60,19 +65,18 @@ def test_reg_pref_age_preset_completes_and_saves_preferences(monkeypatch):
     msg = DummyMessage(user_id=42)
     call = DummyCallback("age:25:35", msg, user_id=42)
 
-    asyncio.run(reg.reg_pref_age_preset(call, state))
+    asyncio.run(reg.reg_pref_age_preset(call, state, i18n))
 
-    fake_api.upsert_preferences.assert_awaited_once_with(
-        42,
-        {"target_gender": "female", "age_min": 25, "age_max": 35},
-    )
-    fake_api.apply_referral.assert_awaited_once_with("ABC123", 42)
-    assert state.data == {}
+    fake_api.upsert_preferences.assert_not_awaited()
+    fake_api.apply_referral.assert_not_awaited()
+    assert state.data["pref_age_min"] == 25
+    assert state.data["pref_age_max"] == 35
+    assert state.current_state == Registration.pref_search_city
     assert call.answer_calls == 1
-    assert any("Анкета готова" in text for text, _ in msg.answers)
+    assert any("Где ищешь собеседников?" in text for text, _ in msg.answers)
 
 
-def test_reg_pref_age_max_custom_completes_without_call_object(monkeypatch):
+def test_reg_pref_age_max_custom_moves_to_search_city(monkeypatch):
     fake_api = SimpleNamespace(
         upsert_preferences=AsyncMock(),
         apply_referral=AsyncMock(),
@@ -82,12 +86,33 @@ def test_reg_pref_age_max_custom_completes_without_call_object(monkeypatch):
     state = DummyState({"pref_target": "any", "pref_age_min": 20})
     msg = DummyMessage(text="30", user_id=7)
 
-    asyncio.run(reg.reg_pref_age_max_custom(msg, state))
+    asyncio.run(reg.reg_pref_age_max_custom(msg, state, i18n))
+
+    fake_api.upsert_preferences.assert_not_awaited()
+    fake_api.apply_referral.assert_not_awaited()
+    assert state.data["pref_age_max"] == 30
+    assert state.current_state == Registration.pref_search_city
+    assert any("Где ищешь собеседников?" in text for text, _ in msg.answers)
+
+
+def test_reg_pref_search_city_any_completes(monkeypatch):
+    fake_api = SimpleNamespace(
+        upsert_preferences=AsyncMock(),
+        apply_referral=AsyncMock(),
+    )
+    monkeypatch.setattr(reg, "api_client", fake_api)
+
+    state = DummyState({"pref_target": "any", "pref_age_min": 20, "pref_age_max": 30})
+    msg = DummyMessage(user_id=7)
+    call = DummyCallback("scity:any", msg, user_id=7)
+
+    asyncio.run(reg.reg_pref_search_city(call, state, i18n))
 
     fake_api.upsert_preferences.assert_awaited_once_with(
         7,
-        {"target_gender": "any", "age_min": 20, "age_max": 30},
+        {"target_gender": "any", "age_min": 20, "age_max": 30, "search_city": None},
     )
     fake_api.apply_referral.assert_not_awaited()
     assert state.data == {}
+    assert call.answer_calls == 1
     assert any("Анкета готова" in text for text, _ in msg.answers)

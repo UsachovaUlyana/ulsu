@@ -157,7 +157,9 @@ async def apply_referral(
     if ref is None:
         raise HTTPException(status_code=409, detail="referral already applied")
 
-    await emit_referral_applied(inviter.id, invitee.id, ref.bonus_value)
+    await emit_referral_applied(
+        inviter.id, inviter.telegram_id, invitee.id, invitee.telegram_id, ref.bonus_value
+    )
     referrals_applied_total.inc()
     return schemas.ReferralResponse(
         inviter_id=inviter.id, invitee_id=invitee.id, bonus_value=ref.bonus_value

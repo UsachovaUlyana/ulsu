@@ -113,15 +113,15 @@ async def handle_referral(payload: dict) -> None:
 
 
 async def handle_review(payload: dict) -> None:
+    reviewer_id = int(payload["reviewer_id"])
     reviewee_id = int(payload["reviewee_id"])
-    from .tasks import recalc_peer_for_user, recalc_combined_all
+    review_score = float(payload.get("score", 0.0))
+    from .tasks import recalc_after_review_event
 
-    recalc_peer_for_user.delay(reviewee_id)
-    # Invalidate feed caches so the new peer_score is reflected in rankings
+    recalc_after_review_event.delay(reviewer_id, reviewee_id, review_score)
+    # Invalidate feed caches so the new scores are reflected in rankings
     from .feed_service import get_redis
-    await get_redis().delete(f"feed:{reviewee_id}")
-    # Also trigger combined recalc so the L3 score updates quickly
-    recalc_combined_all.delay()
+    await get_redis().delete(f"feed:{reviewer_id}", f"feed:{reviewee_id}")
 
 
 def make_consumers() -> list[RabbitMQConsumer]:

@@ -5,107 +5,106 @@
 ```mermaid
 erDiagram
     users {
-        int id PK
+        bigint id PK
         bigint telegram_id UK "NOT NULL"
         varchar username "NULLABLE"
         varchar referral_code UK "NOT NULL"
-        int referred_by FK "NULLABLE → users"
-        boolean is_active "DEFAULT TRUE"
+        bigint referred_by FK "NULLABLE → users"
         timestamp created_at "DEFAULT NOW()"
-        timestamp updated_at "DEFAULT NOW()"
-        timestamp last_active "DEFAULT NOW()"
     }
 
     profiles {
-        int id PK
-        int user_id FK, UK "NOT NULL → users"
+        bigint user_id PK, FK "NOT NULL → users"
         varchar name "NOT NULL"
         smallint age "NOT NULL, CHECK 18..100"
-        varchar gender "NOT NULL (male/female/other)"
-        varchar city "NOT NULL"
+        varchar gender "NOT NULL"
+        varchar city "NULLABLE"
         text bio "NULLABLE"
-        text_arr interests "NULLABLE"
-        boolean is_complete "DEFAULT FALSE"
-        timestamp created_at "DEFAULT NOW()"
+        text_arr interests "NULLABLE, ARRAY(String(32))"
+        timestamp last_active_at "DEFAULT NOW()"
         timestamp updated_at "DEFAULT NOW()"
     }
 
     photos {
-        int id PK
-        int profile_id FK "NOT NULL → profiles"
+        bigint id PK
+        bigint user_id FK "NOT NULL → users"
         varchar s3_key "NOT NULL"
-        varchar s3_bucket "DEFAULT photos"
-        boolean is_primary "DEFAULT FALSE"
-        smallint upload_order "NOT NULL"
+        smallint position "DEFAULT 0"
         timestamp created_at "DEFAULT NOW()"
     }
 
     preferences {
-        int id PK
-        int user_id FK, UK "NOT NULL → users"
+        bigint user_id PK, FK "NOT NULL → users"
         varchar target_gender "NOT NULL (male/female/any)"
         smallint age_min "DEFAULT 18"
-        smallint age_max "DEFAULT 100"
-        varchar city "NULLABLE"
-        int max_distance "NULLABLE (км)"
-        timestamp created_at "DEFAULT NOW()"
+        smallint age_max "DEFAULT 99"
+        varchar search_city "NULLABLE"
         timestamp updated_at "DEFAULT NOW()"
     }
 
     swipes {
-        int id PK
-        int swiper_id FK "NOT NULL → users"
-        int swiped_id FK "NOT NULL → users"
+        bigint id PK
+        bigint swiper_id FK "NOT NULL → users"
+        bigint target_id FK "NOT NULL → users"
         varchar action "NOT NULL (like/skip)"
         timestamp created_at "DEFAULT NOW()"
     }
 
     matches {
-        int id PK
-        int user1_id FK "NOT NULL → users (меньший ID)"
-        int user2_id FK "NOT NULL → users (больший ID)"
-        boolean is_active "DEFAULT TRUE"
-        boolean chat_initiated "DEFAULT FALSE"
+        bigint id PK
+        bigint user1_id FK "NOT NULL → users (меньший ID)"
+        bigint user2_id FK "NOT NULL → users (больший ID)"
         timestamp created_at "DEFAULT NOW()"
-        timestamp updated_at "DEFAULT NOW()"
+        timestamp started_dialog_at "NULLABLE"
     }
 
     ratings {
-        int id PK
-        int user_id FK, UK "NOT NULL → users"
-        float primary_score "DEFAULT 0.0 (0-100)"
-        float profile_completeness "DEFAULT 0.0 (0-1)"
-        float photo_count_score "DEFAULT 0.0 (0-1)"
-        float behavioral_score "DEFAULT 0.0 (0-100)"
-        int likes_received "DEFAULT 0"
-        float like_ratio "DEFAULT 0.0 (0-1)"
-        float match_ratio "DEFAULT 0.0 (0-1)"
-        float chat_initiation_rate "DEFAULT 0.0 (0-1)"
-        float activity_score "DEFAULT 0.0 (0-1)"
-        float combined_score "DEFAULT 0.0"
+        bigint user_id PK, FK "NOT NULL → users"
+        float primary_score "DEFAULT 0.0"
+        float behavioral_score "DEFAULT 0.0"
+        float peer_score "DEFAULT 0.0"
         float referral_bonus "DEFAULT 0.0"
-        timestamp last_calculated_at "NULLABLE"
-        timestamp created_at "DEFAULT NOW()"
+        float combined_score "DEFAULT 0.0"
         timestamp updated_at "DEFAULT NOW()"
     }
 
     referrals {
-        int id PK
-        int referrer_id FK "NOT NULL → users"
-        int referred_id FK, UK "NOT NULL → users"
-        boolean bonus_applied "DEFAULT FALSE"
+        bigint id PK
+        bigint inviter_id FK "NOT NULL → users"
+        bigint invitee_id FK, UK "NOT NULL → users"
+        float bonus_value "DEFAULT 0.05"
+        timestamp applied_at "DEFAULT NOW()"
+    }
+
+    peer_reviews {
+        bigint id PK
+        bigint reviewer_id FK "NOT NULL → users"
+        bigint reviewee_id FK "NOT NULL → users"
+        numeric score "NOT NULL, 1.0–5.0, шаг 0.1"
+        timestamp created_at "DEFAULT NOW()"
+        timestamp updated_at "DEFAULT NOW()"
+    }
+
+    activity_log {
+        bigint id PK
+        bigint user_id FK "NOT NULL → users"
+        varchar event_type "NOT NULL"
+        smallint hour_of_day "NOT NULL"
         timestamp created_at "DEFAULT NOW()"
     }
 
     users ||--|| profiles : "1:1 — имеет анкету"
     users ||--|| preferences : "1:1 — имеет предпочтения"
     users ||--|| ratings : "1:1 — имеет рейтинг"
-    profiles ||--o{ photos : "1:N — содержит фото (макс 5)"
+    users ||--o{ photos : "1:N — содержит фото (макс 5)"
     users ||--o{ swipes : "1:N — делает свайпы"
     users ||--o{ matches : "1:N — участвует в мэтчах (user1)"
     users ||--o{ matches : "1:N — участвует в мэтчах (user2)"
-    users ||--o{ referrals : "1:N — приглашает (referrer)"
-    users ||--o| referrals : "1:1 — приглашён (referred)"
+    users ||--o{ referrals : "1:N — приглашает (inviter)"
+    users ||--o| referrals : "1:1 — приглашён (invitee)"
+    users ||--o{ peer_reviews : "1:N — оценивает (reviewer)"
+    users ||--o{ peer_reviews : "1:N — получает оценки (reviewee)"
+    users ||--o{ activity_log : "1:N — лог активности"
 ```
 
 ---
@@ -118,15 +117,12 @@ erDiagram
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | Внутренний ID |
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | Внутренний ID |
 | `telegram_id` | `BIGINT` | `UNIQUE NOT NULL` | Telegram ID пользователя |
-| `username` | `VARCHAR(255)` | `NULLABLE` | Telegram username |
-| `referral_code` | `VARCHAR(32)` | `UNIQUE NOT NULL` | Уникальный реферальный код |
-| `referred_by` | `INTEGER` | `FK → users(id), NULLABLE` | Кто пригласил |
-| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Активен ли аккаунт |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата регистрации |
-| `updated_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата последнего обновления |
-| `last_active` | `TIMESTAMP` | `DEFAULT NOW()` | Время последней активности |
+| `username` | `VARCHAR(64)` | `NULLABLE` | Telegram username |
+| `referral_code` | `VARCHAR(16)` | `UNIQUE NOT NULL` | Уникальный реферальный код |
+| `referred_by` | `BIGINT` | `FK → users(id) ON DELETE SET NULL, NULLABLE` | Кто пригласил |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата регистрации |
 
 <details>
 <summary>📑 Индексы</summary>
@@ -135,7 +131,6 @@ erDiagram
 |:----|:-----|:----|:-----------|
 | `idx_users_telegram_id` | `telegram_id` | UNIQUE | Основной поиск по Telegram ID |
 | `idx_users_referral_code` | `referral_code` | UNIQUE | Поиск по реферальному коду |
-| `idx_users_is_active` | `is_active` | B-tree | Фильтрация активных пользователей |
 
 </details>
 
@@ -147,28 +142,23 @@ erDiagram
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID анкеты |
-| `user_id` | `INTEGER` | `FK → users(id), UNIQUE NOT NULL` | Владелец (1:1) |
-| `name` | `VARCHAR(100)` | `NOT NULL` | Имя |
+| `user_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, PRIMARY KEY` | Владелец (1:1) |
+| `name` | `VARCHAR(64)` | `NOT NULL` | Имя |
 | `age` | `SMALLINT` | `NOT NULL, CHECK(18..100)` | Возраст |
-| `gender` | `VARCHAR(20)` | `NOT NULL` | Пол (`male` / `female` / `other`) |
-| `city` | `VARCHAR(100)` | `NOT NULL` | Город |
-| `bio` | `TEXT` | `NULLABLE` | О себе (до 500 символов) |
-| `interests` | `TEXT[]` | `NULLABLE` | Массив интересов |
-| `is_complete` | `BOOLEAN` | `DEFAULT FALSE` | Полностью ли заполнена анкета |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата создания |
-| `updated_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата обновления |
+| `gender` | `VARCHAR(16)` | `NOT NULL` | Пол (`male` / `female` / `other`) |
+| `city` | `VARCHAR(64)` | `NULLABLE` | Город (нормализуется в lowercase) |
+| `bio` | `TEXT` | `NULLABLE` | О себе (до 2000 символов) |
+| `interests` | `VARCHAR(32)[]` | `NULLABLE` | Массив интересов (макс 20) |
+| `last_active_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время последней активности |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата последнего обновления |
 
 <details>
-<summary>📑 Индексы</summary>
+<summary>📑 Индексы и ограничения</summary>
 
-| Имя | Поля | Тип | Назначение |
-|:----|:-----|:----|:-----------|
-| `idx_profiles_user_id` | `user_id` | UNIQUE | Поиск анкеты по пользователю |
-| `idx_profiles_gender` | `gender` | B-tree | Фильтрация по полу |
-| `idx_profiles_city` | `city` | B-tree | Фильтрация по городу |
-| `idx_profiles_age` | `age` | B-tree | Фильтрация по возрасту |
-| `idx_profiles_filter` | `gender, city, age` | Composite | Основной фильтр ранжирования |
+| Имя | Поля / Выражение | Тип | Назначение |
+|:----|:-----------------|:----|:-----------|
+| `ck_profile_age` | `age >= 18 AND age <= 100` | CHECK | Диапазон возраста |
+| `ix_profiles_gender_age` | `gender, age` | Composite | Фильтр ленты по полу и возрасту |
 
 </details>
 
@@ -176,19 +166,15 @@ erDiagram
 
 ### 3. `photos` — Фотографии
 
-> Фотографии анкеты. Файлы хранятся в MinIO (S3), в БД только ключи.
+> Фотографии анкеты. Файлы хранятся в MinIO (S3), в БД только ключи. Макс. 5 фото на пользователя.
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID фото |
-| `profile_id` | `INTEGER` | `FK → profiles(id), NOT NULL` | Анкета-владелец |
-| `s3_key` | `VARCHAR(512)` | `NOT NULL` | Ключ объекта в S3 (MinIO) |
-| `s3_bucket` | `VARCHAR(100)` | `NOT NULL, DEFAULT 'photos'` | Бакет в S3 |
-| `is_primary` | `BOOLEAN` | `DEFAULT FALSE` | Главное фото (аватар) |
-| `upload_order` | `SMALLINT` | `NOT NULL` | Порядок отображения |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата загрузки |
-
-> **Ограничения:** макс. 5 фотографий на анкету, ровно одно `is_primary = TRUE`
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID фото |
+| `user_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Владелец |
+| `s3_key` | `VARCHAR(256)` | `NOT NULL` | Ключ объекта в S3 (MinIO) |
+| `position` | `SMALLINT` | `DEFAULT 0` | Порядок отображения |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата загрузки |
 
 ---
 
@@ -198,39 +184,45 @@ erDiagram
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID |
-| `user_id` | `INTEGER` | `FK → users(id), UNIQUE NOT NULL` | Владелец (1:1) |
-| `target_gender` | `VARCHAR(20)` | `NOT NULL` | Кого ищу (`male` / `female` / `any`) |
+| `user_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, PRIMARY KEY` | Владелец (1:1) |
+| `target_gender` | `VARCHAR(16)` | `NOT NULL` | Кого ищу (`male` / `female` / `any`) |
 | `age_min` | `SMALLINT` | `DEFAULT 18, CHECK(≥ 18)` | Мин. возраст |
-| `age_max` | `SMALLINT` | `DEFAULT 100, CHECK(≤ 100)` | Макс. возраст |
-| `city` | `VARCHAR(100)` | `NULLABLE` | Город поиска (`NULL` = любой) |
-| `max_distance` | `INTEGER` | `NULLABLE` | Макс. расстояние в км (на будущее) |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата создания |
-| `updated_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата обновления |
+| `age_max` | `SMALLINT` | `DEFAULT 99, CHECK(≤ 100)` | Макс. возраст |
+| `search_city` | `VARCHAR(64)` | `NULLABLE` | Город поиска (`NULL` = любой; нормализуется в lowercase) |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата обновления |
+
+<details>
+<summary>📑 Ограничения</summary>
+
+| Имя | Выражение | Тип | Назначение |
+|:----|:----------|:----|:-----------|
+| `ck_pref_age_range` | `age_min <= age_max` | CHECK | Корректность диапазона |
+
+</details>
 
 ---
 
 ### 5. `swipes` — Свайпы (лайки / пропуски)
 
-> Каждый свайп — одна запись. Уникальность на пару `(swiper, swiped)`.
+> Каждый свайп — одна запись. Уникальность на пару `(swiper_id, target_id)`.
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID свайпа |
-| `swiper_id` | `INTEGER` | `FK → users(id), NOT NULL` | Кто свайпнул |
-| `swiped_id` | `INTEGER` | `FK → users(id), NOT NULL` | Кого свайпнули |
-| `action` | `VARCHAR(10)` | `NOT NULL, CHECK('like','skip')` | Действие |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Время свайпа |
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID свайпа |
+| `swiper_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Кто свайпнул |
+| `target_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Кого свайпнули |
+| `action` | `VARCHAR(8)` | `NOT NULL, CHECK('like','skip')` | Действие |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время свайпа |
 
 <details>
-<summary>📑 Индексы</summary>
+<summary>📑 Индексы и ограничения</summary>
 
-| Имя | Поля | Тип | Назначение |
-|:----|:-----|:----|:-----------|
-| `idx_swipes_pair` | `swiper_id, swiped_id` | UNIQUE | Один свайп на пару |
-| `idx_swipes_swiped` | `swiped_id` | B-tree | Подсчёт лайков/пропусков |
-| `idx_swipes_action` | `action` | B-tree | Фильтрация по типу |
-| `idx_swipes_created` | `created_at` | B-tree | Временные запросы для рейтинга |
+| Имя | Поля / Выражение | Тип | Назначение |
+|:----|:-----------------|:----|:-----------|
+| `uq_swipe_pair` | `swiper_id, target_id` | UNIQUE | Один свайп на пару |
+| `ck_swipe_action` | `action IN ('like','skip')` | CHECK | Допустимые действия |
+| `ck_swipe_self` | `swiper_id <> target_id` | CHECK | Запрет свайпа самого себя |
+| `ix_swipes_target_action` | `target_id, action` | Composite | Подсчёт лайков/пропусков |
 
 </details>
 
@@ -242,22 +234,19 @@ erDiagram
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID мэтча |
-| `user1_id` | `INTEGER` | `FK → users(id), NOT NULL` | Первый пользователь (меньший ID) |
-| `user2_id` | `INTEGER` | `FK → users(id), NOT NULL` | Второй пользователь (больший ID) |
-| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Активен ли мэтч |
-| `chat_initiated` | `BOOLEAN` | `DEFAULT FALSE` | Начат ли диалог |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Время мэтча |
-| `updated_at` | `TIMESTAMP` | `DEFAULT NOW()` | Последнее обновление |
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID мэтча |
+| `user1_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Первый пользователь (меньший ID) |
+| `user2_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Второй пользователь (больший ID) |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время мэтча |
+| `started_dialog_at` | `TIMESTAMPTZ` | `NULLABLE` | Время начала диалога |
 
 <details>
-<summary>📑 Индексы</summary>
+<summary>📑 Индексы и ограничения</summary>
 
-| Имя | Поля | Тип | Назначение |
-|:----|:-----|:----|:-----------|
-| `idx_matches_pair` | `user1_id, user2_id` | UNIQUE | Один мэтч на пару |
-| `idx_matches_user1` | `user1_id` | B-tree | Поиск мэтчей пользователя |
-| `idx_matches_user2` | `user2_id` | B-tree | Поиск мэтчей пользователя |
+| Имя | Поля / Выражение | Тип | Назначение |
+|:----|:-----------------|:----|:-----------|
+| `uq_match_pair` | `user1_id, user2_id` | UNIQUE | Один мэтч на пару |
+| `ck_match_order` | `user1_id < user2_id` | CHECK | Упорядочивание ID |
 
 </details>
 
@@ -265,37 +254,19 @@ erDiagram
 
 ### 7. `ratings` — Рейтинги
 
-> Отдельная таблица с рейтингами. Пересчитывается Celery-задачами.
+> Итоговые и промежуточные рейтинги пользователей. Пересчитывается Celery-задачами и реактивно на события.
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID записи |
-| `user_id` | `INTEGER` | `FK → users(id), UNIQUE NOT NULL` | Пользователь |
-| `primary_score` | `FLOAT` | `DEFAULT 0.0` | Первичный рейтинг (0–100) |
-| `profile_completeness` | `FLOAT` | `DEFAULT 0.0` | Полнота анкеты (0–1) |
-| `photo_count_score` | `FLOAT` | `DEFAULT 0.0` | Балл за кол-во фото (0–1) |
-| `behavioral_score` | `FLOAT` | `DEFAULT 0.0` | Поведенческий рейтинг (0–100) |
-| `likes_received` | `INTEGER` | `DEFAULT 0` | Всего лайков получено |
-| `like_ratio` | `FLOAT` | `DEFAULT 0.0` | Лайки / показы (0–1) |
-| `match_ratio` | `FLOAT` | `DEFAULT 0.0` | Мэтчи / лайки (0–1) |
-| `chat_initiation_rate` | `FLOAT` | `DEFAULT 0.0` | Начатые диалоги / мэтчи (0–1) |
-| `activity_score` | `FLOAT` | `DEFAULT 0.0` | Активность по времени суток (0–1) |
-| `combined_score` | `FLOAT` | `DEFAULT 0.0` | **Итоговый комбинированный рейтинг** |
+| `user_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, PRIMARY KEY` | Пользователь |
+| `primary_score` | `FLOAT` | `DEFAULT 0.0` | Первичный рейтинг (заполненность профиля) |
+| `behavioral_score` | `FLOAT` | `DEFAULT 0.0` | Поведенческий рейтинг (свайпы, мэтчи, диалоги, активность) |
+| `peer_score` | `FLOAT` | `DEFAULT 0.0` | Оценки от других пользователей (peer reviews) |
 | `referral_bonus` | `FLOAT` | `DEFAULT 0.0` | Бонус за рефералов |
-| `last_calculated_at` | `TIMESTAMP` | `NULLABLE` | Время последнего пересчёта |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата создания |
-| `updated_at` | `TIMESTAMP` | `DEFAULT NOW()` | Дата обновления |
+| `combined_score` | `FLOAT` | `DEFAULT 0.0` | **Итоговый комбинированный рейтинг** |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время последнего обновления |
 
-<details>
-<summary>📑 Индексы</summary>
-
-| Имя | Поля | Тип | Назначение |
-|:----|:-----|:----|:-----------|
-| `idx_ratings_user` | `user_id` | UNIQUE | Один рейтинг на пользователя |
-| `idx_ratings_score` | `combined_score DESC` | B-tree | Сортировка по рейтингу |
-| `idx_ratings_stale` | `last_calculated_at` | B-tree | Выборка устаревших для пересчёта |
-
-</details>
+> **Примечание.** Расчётные компоненты (`profile_completeness`, `photo_count_score`, `like_ratio`, `match_ratio`, `activity_score` и др.) вынесены в Python-код (`ranking-service/app/formulas.py`) и не хранятся в БД.
 
 ---
 
@@ -305,97 +276,102 @@ erDiagram
 
 | Поле | Тип | Ограничения | Описание |
 |:-----|:----|:------------|:---------|
-| `id` | `SERIAL` | `PRIMARY KEY` | ID записи |
-| `referrer_id` | `INTEGER` | `FK → users(id), NOT NULL` | Пригласивший |
-| `referred_id` | `INTEGER` | `FK → users(id), UNIQUE NOT NULL` | Приглашённый |
-| `bonus_applied` | `BOOLEAN` | `DEFAULT FALSE` | Бонус начислен |
-| `created_at` | `TIMESTAMP` | `DEFAULT NOW()` | Время регистрации реферала |
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID записи |
+| `inviter_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Пригласивший |
+| `invitee_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, UNIQUE NOT NULL` | Приглашённый |
+| `bonus_value` | `FLOAT` | `DEFAULT 0.05` | Величина бонуса к рейтингу |
+| `applied_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время применения реферала |
+
+<details>
+<summary>📑 Ограничения</summary>
+
+| Имя | Выражение | Тип | Назначение |
+|:----|:----------|:----|:-----------|
+| `ck_referral_self` | `inviter_id <> invitee_id` | CHECK | Запрет самоприглашения |
+| `uq_referral_invitee` | `invitee_id` | UNIQUE | Один invitee — один реферал |
+
+</details>
 
 ---
 
-## Формулы рейтинга
+### 9. `peer_reviews` — Оценки между мэтчами
+
+> После мэтча пользователи могут оценить друг друга по шкале 1.0–5.0 с шагом 0.1. Оценка влияет на `peer_score` в таблице `ratings`.
+
+| Поле | Тип | Ограничения | Описание |
+|:-----|:----|:------------|:---------|
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID оценки |
+| `reviewer_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Кто оценивает |
+| `reviewee_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Кого оценивают |
+| `score` | `NUMERIC(2,1)` | `NOT NULL` | Оценка (1.0 – 5.0, шаг 0.1) |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время создания |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время обновления |
+
+> **Upsert-логика:** при повторной оценке той же пары `reviewer_id + reviewee_id` запись обновляется (`ON CONFLICT DO UPDATE`).
+
+<details>
+<summary>📑 Индексы и ограничения</summary>
+
+| Имя | Поля / Выражение | Тип | Назначение |
+|:----|:-----------------|:----|:-----------|
+| `uq_peer_review_pair` | `reviewer_id, reviewee_id` | UNIQUE | Одна оценка на пару |
+| `ck_peer_review_score_range` | `score >= 1.0 AND score <= 5.0` | CHECK | Диапазон оценки |
+| `ck_peer_review_score_step` | `score * 10 = floor(score * 10)` | CHECK | Шаг 0.1 |
+| `ck_peer_review_no_self` | `reviewer_id <> reviewee_id` | CHECK | Запрет самооценки |
+| `ix_peer_reviews_reviewee_id` | `reviewee_id` | B-tree | Подсчёт средней оценки |
+
+</details>
+
+---
+
+### 10. `activity_log` — Лог активности
+
+> Сырые события активности пользователей. Используется для расчёта `behavioral_score` (компонент `active_hours_count`).
+
+| Поле | Тип | Ограничения | Описание |
+|:-----|:----|:------------|:---------|
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | ID записи |
+| `user_id` | `BIGINT` | `FK → users(id) ON DELETE CASCADE, NOT NULL` | Пользователь |
+| `event_type` | `VARCHAR(32)` | `NOT NULL` | Тип события (`swipe`, `match`, `message` и т.п.) |
+| `hour_of_day` | `SMALLINT` | `NOT NULL` | Час дня (0–23) |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время события |
+
+---
+
+## Формулы рейтинга (кратко)
+
+> Подробное описание весов, нормализаций и Celery-расписания см. в `scoring.md`.
 
 ### Уровень 1 — Первичный рейтинг (`primary_score`)
 
-```mermaid
-graph LR
-    subgraph INPUT["📥 Входные данные"]
-        F["Заполненные поля<br/>(name, age, gender,<br/>city, bio, interests)"]
-        P["Количество фото<br/>(0–5)"]
-    end
-
-    subgraph CALC["🧮 Расчёт"]
-        PC["profile_completeness<br/>= filled / 6<br/>+ 0.1 если bio заполнено"]
-        PH["photo_count_score<br/>= min(photos / 3, 1.0)"]
-    end
-
-    subgraph RESULT["📊 Результат"]
-        PS["primary_score<br/>= completeness × 60<br/>+ photo_score × 40<br/><b>Диапазон: 0–100</b>"]
-    end
-
-    F --> PC
-    P --> PH
-    PC --> PS
-    PH --> PS
-
-    style INPUT fill:#e3f2fd,stroke:#1976d2
-    style CALC fill:#fff3e0,stroke:#f57c00
-    style RESULT fill:#e8f5e9,stroke:#388e3c
-```
+Рассчитывается реактивно при обновлении профиля. Компоненты:
+- **Заполненность полей** (`name`, `age`, `gender`, `city`, `bio`) + плотность интересов
+- **Количество фото** (нормализовано до 5)
+- **Наличие предпочтений** (`preferences`)
 
 ### Уровень 2 — Поведенческий рейтинг (`behavioral_score`)
 
-```mermaid
-graph LR
-    subgraph INPUT["📥 Метрики поведения"]
-        LR_["like_ratio<br/>= likes / views"]
-        MR["match_ratio<br/>= matches / likes_given"]
-        CR["chat_rate<br/>= chats / matches"]
-        AS["activity_score<br/>= peak_hours_coeff"]
-    end
+Пересчитывается Celery каждые 15 минут по окну в 14 дней. Компоненты:
+- Полученные лайки / пропуски
+- Соотношение лайков к пропускам
+- Взаимные мэтчи
+- Начатые диалоги (`started_dialog_at IS NOT NULL`)
+- Активность по часам (`activity_log.hour_of_day`)
 
-    subgraph WEIGHTS["⚖️ Веса"]
-        W1["× 30"]
-        W2["× 30"]
-        W3["× 20"]
-        W4["× 20"]
-    end
+### Peer score (`peer_score`)
 
-    subgraph RESULT["📊 Результат"]
-        BS["behavioral_score<br/>= LR×30 + MR×30<br/>+ CR×20 + AS×20<br/><b>Диапазон: 0–100</b>"]
-    end
-
-    LR_ --> W1 --> BS
-    MR --> W2 --> BS
-    CR --> W3 --> BS
-    AS --> W4 --> BS
-
-    style INPUT fill:#fce4ec,stroke:#c62828
-    style WEIGHTS fill:#fff3e0,stroke:#f57c00
-    style RESULT fill:#e8f5e9,stroke:#388e3c
-```
+Рассчитывается на основе `peer_reviews` с **Bayesian smoothing** (prior mean и prior weight), чтобы 1–2 оценки не сильно качали рейтинг. Нормализуется относительно нейтрали 3.0.
 
 ### Уровень 3 — Комбинированный рейтинг (`combined_score`)
 
-```mermaid
-graph LR
-    subgraph SCORES["📥 Рейтинги"]
-        PS["primary_score<br/>(0–100)"]
-        BS["behavioral_score<br/>(0–100)"]
-        RB["referral_bonus<br/>= referrals × 2.0<br/>(макс 10.0)"]
-    end
-
-    subgraph FORMULA["🧮 Формула"]
-        CALC["combined_score =<br/>primary × <b>0.3</b><br/>+ behavioral × <b>0.7</b><br/>+ referral_bonus"]
-    end
-
-    PS -->|"вес 0.3"| CALC
-    BS -->|"вес 0.7"| CALC
-    RB -->|"бонус"| CALC
-
-    style SCORES fill:#e3f2fd,stroke:#1976d2
-    style FORMULA fill:#e8f5e9,stroke:#388e3c
 ```
+combined = primary × w_primary
+         + behavioral × w_behavioral
+         + peer_score × w_peer
+         + referral_norm × w_referral
+```
+
+Все компоненты нормализованы в `[0, 1]`, итог капируется в `settings.combined_score_max`.
 
 ---
 
@@ -405,12 +381,7 @@ graph LR
 graph TB
     subgraph REDIS["⚡ Redis"]
         subgraph FEED["Лента анкет"]
-            F1["🔑 feed:{telegram_id}<br/>📦 ZSET {profile_id: score, ...}<br/>⏰ TTL: 30 мин"]
-            F2["🔑 feed:{telegram_id}:offset<br/>📦 INTEGER (позиция)<br/>⏰ TTL: 30 мин"]
-        end
-
-        subgraph PROFILE_CACHE["Кэш профилей"]
-            P1["🔑 profile:{user_id}<br/>📦 HASH {name, age, gender,<br/>city, bio, photo_urls}<br/>⏰ TTL: 15 мин"]
+            F1["🔑 feed:{user_id}<br/>📦 ZSET {json_profile: score, ...}<br/>⏰ TTL: 30 мин<br/>📏 Размер батча: 10"]
         end
 
         subgraph LOCKS["Блокировки"]
@@ -420,6 +391,12 @@ graph TB
 
     style REDIS fill:#fbe9e7,stroke:#dc382d
     style FEED fill:#fff3e0,stroke:#f57c00
-    style PROFILE_CACHE fill:#e3f2fd,stroke:#1976d2
     style LOCKS fill:#f3e5f5,stroke:#7b1fa2
 ```
+
+| Ключ | Тип | Содержимое | TTL |
+|:-----|:----|:-----------|:----|
+| `feed:{user_id}` | `ZSET` | JSON-сериализованные объекты профилей с полями `telegram_id`, `profile`, `compatibility`, `combined_score`, `primary_score`, `peer_rating` | 30 мин |
+| `rating:recalculate:lock` | `STRING` | Флаг блокировки параллельного пересчёта | 60 сек |
+
+> **Как работает лента:** при cache miss Ranking Service делает SQL-запрос кандидатов, сортирует по `peer_count` + семантическому overlap интересов, кладёт топ-N в ZSET и отдаёт первый элемент. При cache hit — достаёт из вершины ZSET.

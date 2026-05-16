@@ -14,6 +14,8 @@ class Registration(StatesGroup):
     pref_target_gender = State()
     pref_age_min = State()
     pref_age_max = State()
+    pref_search_city = State()
+    pref_search_city_custom = State()
 
 
 class Filters(StatesGroup):
@@ -21,6 +23,8 @@ class Filters(StatesGroup):
     target_gender = State()
     age_min = State()
     age_max = State()
+    search_city = State()
+    search_city_custom = State()
 
 
 class LikesFeed(StatesGroup):

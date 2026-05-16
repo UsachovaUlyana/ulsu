@@ -11,6 +11,7 @@ RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
 COPY services/_shared /app/shared
 COPY services/ranking-service /app/
+COPY services/ranking-service/models/model.bin /app/models/model.bin
 
 ENV PYTHONPATH=/app
 

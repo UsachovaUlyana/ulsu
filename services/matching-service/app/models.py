@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Numeric,
     String,
     UniqueConstraint,
     func,
@@ -73,7 +74,8 @@ class PeerReview(Base):
     __tablename__ = "peer_reviews"
     __table_args__ = (
         UniqueConstraint("reviewer_id", "reviewee_id", name="uq_peer_review_pair"),
-        CheckConstraint("score BETWEEN 1 AND 5", name="ck_peer_review_score_range"),
+        CheckConstraint("score >= 1.0 AND score <= 5.0", name="ck_peer_review_score_range"),
+        CheckConstraint("score * 10 = floor(score * 10)", name="ck_peer_review_score_step"),
         CheckConstraint("reviewer_id <> reviewee_id", name="ck_peer_review_no_self"),
         Index("ix_peer_reviews_reviewee_id", "reviewee_id"),
     )
@@ -85,7 +87,7 @@ class PeerReview(Base):
     reviewee_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE")
     )
-    score: Mapped[int] = mapped_column(BigInteger)
+    score: Mapped[float] = mapped_column(Numeric(2, 1))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

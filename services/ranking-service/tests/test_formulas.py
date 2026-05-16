@@ -5,7 +5,9 @@ import pytest
 from app.config import settings
 from app.formulas import (
     behavioral_score,
+    combined_after_review,
     combined_score,
+    peer_score_formula,
     primary_score,
 )
 
@@ -90,12 +92,56 @@ def test_combined_score_primary_increases_total():
     assert high_primary > low_primary
 
 
-def test_combined_score_peer_component_weight():
-    without_peer = combined_score(
-        primary=0.4, behavioral=0.4, referral_bonus=0.1, peer_score=0.0
+def test_combined_score_is_bounded_by_five():
+    s = combined_score(
+        primary=10.0, behavioral=10.0, referral_bonus=10.0, peer_score=10.0
     )
-    with_peer = combined_score(
-        primary=0.4, behavioral=0.4, referral_bonus=0.1, peer_score=0.8
+    assert s == pytest.approx(settings.combined_score_max, abs=1e-9)
+
+
+def test_combined_after_review_good_score_never_decreases():
+    old = 3.2
+    current = 2.9
+    new_value = combined_after_review(
+        previous_combined=old,
+        current_combined=current,
+        review_score=4.5,
     )
-    expected_delta = settings.w_combined_peer * 0.8
-    assert with_peer - without_peer == pytest.approx(expected_delta, abs=1e-9)
+    assert new_value == old
+
+
+def test_combined_after_review_low_score_keeps_current():
+    old = 3.2
+    current = 2.9
+    new_value = combined_after_review(
+        previous_combined=old,
+        current_combined=current,
+        review_score=4.4,
+    )
+    assert new_value == current
+
+
+def test_peer_score_formula_penalizes_low_reviews():
+    score = peer_score_formula(peer_avg=2.0, peer_count=20)
+    assert score < 0
+
+
+def test_peer_score_formula_rewards_high_reviews():
+    score = peer_score_formula(peer_avg=5.0, peer_count=20)
+    assert score > 0
+
+
+def test_peer_score_formula_neutral_at_three():
+    score = peer_score_formula(peer_avg=3.0, peer_count=20)
+    assert score == pytest.approx(0.0, abs=1e-9)
+
+
+def test_peer_score_formula_bayesian_smoothing_for_single_review():
+    score = peer_score_formula(peer_avg=5.0, peer_count=1)
+    # With smoothing and dampening this should be positive, but small.
+    assert 0 < score < 0.05
+
+
+def test_peer_score_formula_full_dampening_after_threshold():
+    score = peer_score_formula(peer_avg=5.0, peer_count=int(settings.peer_dampening_threshold))
+    assert score > 0.1

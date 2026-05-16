@@ -7,7 +7,7 @@ from prometheus_client import start_http_server
 from shared.logging import configure_logging, get_logger
 
 from .config import settings
-from .consumer import make_consumer, make_like_consumer
+from .consumer import make_consumer, make_like_consumer, make_referral_consumer
 from .telegram_client import client as tg_client
 
 configure_logging("notification-service", settings.log_level)
@@ -21,10 +21,12 @@ async def main() -> None:
 
     match_consumer = make_consumer()
     like_consumer = make_like_consumer()
+    referral_consumer = make_referral_consumer()
     try:
         await asyncio.gather(
             match_consumer.run(),
             like_consumer.run(),
+            referral_consumer.run(),
         )
     finally:
         await tg_client.close()

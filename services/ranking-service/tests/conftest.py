@@ -20,7 +20,7 @@ if "shared" not in sys.modules:
     spec.loader.exec_module(module)
     sys.modules["shared"] = module
     # Submodules
-    for sub in ("logging", "events", "metrics", "settings", "rabbitmq"):
+    for sub in ("logging", "events", "metrics", "settings", "rabbitmq", "circuit_breaker"):
         sub_spec = importlib.util.spec_from_file_location(
             f"shared.{sub}", str(ROOT.parent / "_shared" / f"{sub}.py")
         )
