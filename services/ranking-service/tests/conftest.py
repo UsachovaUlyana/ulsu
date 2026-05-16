@@ -3,6 +3,7 @@ locally we add ../../_shared so `from shared.X import ...` works."""
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
@@ -10,9 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent))  # services/, so `_shared` is importable
 sys.path.insert(0, str(ROOT.parent / "_shared"))
-
-# Re-export under the alias used in production: `shared`
-import importlib
 
 if "shared" not in sys.modules:
     spec = importlib.util.spec_from_file_location(
