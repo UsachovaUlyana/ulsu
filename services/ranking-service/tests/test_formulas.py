@@ -2,22 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from app.config import settings
 from app.formulas import (
     behavioral_score,
     combined_score,
-    haversine_km,
     primary_score,
 )
-
-
-def test_haversine_zero_distance():
-    assert haversine_km(55.75, 37.62, 55.75, 37.62) == pytest.approx(0.0, abs=1e-6)
-
-
-def test_haversine_moscow_spb():
-    # Moscow ~ (55.75, 37.62), SPb ~ (59.93, 30.31). True great-circle ≈ 633 km
-    d = haversine_km(55.75, 37.62, 59.93, 30.31)
-    assert 600 < d < 700
 
 
 def test_primary_score_empty():
@@ -81,6 +71,31 @@ def test_behavioral_score_active_user():
 
 def test_combined_score_referral_capped():
     # huge referral bonus must be capped (cap=0.3)
-    s_uncapped_input = combined_score(primary=0.5, behavioral=0.5, referral_bonus=10.0)
-    s_capped_input = combined_score(primary=0.5, behavioral=0.5, referral_bonus=0.3)
+    s_uncapped_input = combined_score(
+        primary=0.5, behavioral=0.5, referral_bonus=10.0, peer_score=0.2
+    )
+    s_capped_input = combined_score(
+        primary=0.5, behavioral=0.5, referral_bonus=0.3, peer_score=0.2
+    )
     assert s_uncapped_input == pytest.approx(s_capped_input, abs=1e-9)
+
+
+def test_combined_score_primary_increases_total():
+    low_primary = combined_score(
+        primary=0.1, behavioral=0.5, referral_bonus=0.2, peer_score=0.3
+    )
+    high_primary = combined_score(
+        primary=0.9, behavioral=0.5, referral_bonus=0.2, peer_score=0.3
+    )
+    assert high_primary > low_primary
+
+
+def test_combined_score_peer_component_weight():
+    without_peer = combined_score(
+        primary=0.4, behavioral=0.4, referral_bonus=0.1, peer_score=0.0
+    )
+    with_peer = combined_score(
+        primary=0.4, behavioral=0.4, referral_bonus=0.1, peer_score=0.8
+    )
+    expected_delta = settings.w_combined_peer * 0.8
+    assert with_peer - without_peer == pytest.approx(expected_delta, abs=1e-9)

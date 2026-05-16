@@ -8,7 +8,7 @@ from shared.metrics import registrations_total, referrals_applied_total
 
 from . import crud, schemas
 from .database import get_session
-from .events_publisher import emit_profile_updated, emit_referral_applied
+from .events_publisher import emit_profile_deleted, emit_profile_updated, emit_referral_applied
 from .minio_service import get_minio
 
 logger = get_logger(__name__)
@@ -162,6 +162,27 @@ async def apply_referral(
     return schemas.ReferralResponse(
         inviter_id=inviter.id, invitee_id=invitee.id, bonus_value=ref.bonus_value
     )
+
+
+@router.delete("/users/{telegram_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    telegram_id: int, session: AsyncSession = Depends(get_session)
+):
+    user = await crud.get_user_by_telegram_id(session, telegram_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    # Load photos and purge from MinIO before DB cascade wipes the rows
+    user_with_photos = await crud.get_full_profile(session, telegram_id)
+    minio = get_minio()
+    if user_with_photos:
+        for photo in user_with_photos.photos:
+            minio.delete(photo.s3_key)
+
+    await crud.delete_user(session, telegram_id)
+    await emit_profile_deleted(user_with_photos.id, telegram_id)
+    logger.info("user_deleted", telegram_id=telegram_id, user_id=user_with_photos.id)
+    return None
 
 
 @router.get("/health")

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from shared.events import EXCHANGE_MATCHES, RK_MATCH_CREATED
+from shared.events import EXCHANGE_MATCHES, EXCHANGE_SWIPES, RK_LIKE_RECEIVED, RK_MATCH_CREATED
 from shared.logging import get_logger
+from shared.metrics import likes_notified_total
 from shared.rabbitmq import RabbitMQConsumer
 
 from .config import settings
@@ -24,6 +25,8 @@ async def handle_match_event(payload: dict) -> None:
 
     u1_name = (u1.get("profile") or {}).get("name", "Кто-то")
     u2_name = (u2.get("profile") or {}).get("name", "Кто-то")
+    u1_username = (u1.get("user") or {}).get("username")
+    u2_username = (u2.get("user") or {}).get("username")
     u1_interests = (u1.get("profile") or {}).get("interests")
     u2_interests = (u2.get("profile") or {}).get("interests")
 
@@ -39,11 +42,24 @@ async def handle_match_event(payload: dict) -> None:
         f"💡 <i>Темы для начала разговора ({category}):</i>\n{bullets}"
     )
 
+    if u2_username:
+        msg_for_u1 += f"\n\n👤 Напиши ему/ей: @{u2_username}"
+    if u1_username:
+        msg_for_u2 += f"\n\n👤 Напиши ему/ей: @{u1_username}"
+
     await tg_client.send_message(u1_tid, msg_for_u1)
     await tg_client.send_message(u2_tid, msg_for_u2)
     logger.info(
         "match_notified", u1=u1_tid, u2=u2_tid, category=category, topics=len(topics)
     )
+
+
+async def handle_like_received(payload: dict) -> None:
+    target_tid = int(payload["target_telegram_id"])
+    msg = "❤️ Кому-то понравилась твоя анкета! Загляни в бот, чтобы узнать кто."
+    await tg_client.send_message(target_tid, msg)
+    likes_notified_total.inc()
+    logger.info("like_notified", target_tid=target_tid)
 
 
 def make_consumer() -> RabbitMQConsumer:
@@ -53,4 +69,14 @@ def make_consumer() -> RabbitMQConsumer:
         queue_name="notification.match_events",
         routing_keys=[RK_MATCH_CREATED],
         handler=handle_match_event,
+    )
+
+
+def make_like_consumer() -> RabbitMQConsumer:
+    return RabbitMQConsumer(
+        url=settings.rabbitmq_url,
+        exchange=EXCHANGE_SWIPES,
+        queue_name="notification.like_events",
+        routing_keys=[RK_LIKE_RECEIVED],
+        handler=handle_like_received,
     )

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.keyboards import (
     age_preset_kb,
-    distance_kb,
     gender_kb,
     main_menu_kb,
     photos_done_kb,
@@ -21,12 +20,6 @@ def test_target_gender_kb():
     kb = target_gender_kb()
     flat = [b.callback_data for row in kb.inline_keyboard for b in row]
     assert flat == ["tgender:male", "tgender:female", "tgender:any"]
-
-
-def test_distance_kb_six_options():
-    kb = distance_kb()
-    flat = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert flat == ["dist:5", "dist:10", "dist:25", "dist:50", "dist:100", "dist:0"]
 
 
 def test_swipe_kb_encodes_target_id():

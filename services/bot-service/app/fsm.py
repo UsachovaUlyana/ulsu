@@ -8,14 +8,12 @@ class Registration(StatesGroup):
     age = State()
     gender = State()
     city = State()
-    location = State()
     bio = State()
     interests = State()
     photos = State()
     pref_target_gender = State()
     pref_age_min = State()
     pref_age_max = State()
-    pref_distance = State()
 
 
 class Filters(StatesGroup):
@@ -23,4 +21,11 @@ class Filters(StatesGroup):
     target_gender = State()
     age_min = State()
     age_max = State()
-    distance = State()
+
+
+class LikesFeed(StatesGroup):
+    viewing = State()
+
+
+class RatePeer(StatesGroup):
+    choosing_score = State()

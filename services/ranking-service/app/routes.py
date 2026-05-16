@@ -13,9 +13,11 @@ router = APIRouter(prefix="/api/v1")
 
 @router.get("/feed/{telegram_id}")
 async def feed(
-    telegram_id: int, session: AsyncSession = Depends(get_async_session)
+    telegram_id: int,
+    exclude_telegram_id: int | None = None,
+    session: AsyncSession = Depends(get_async_session),
 ):
-    candidate = await get_next_candidate(session, telegram_id)
+    candidate = await get_next_candidate(session, telegram_id, exclude_telegram_id)
     if candidate is None:
         return {"profile": None}
     candidate["photos"] = await get_photos(candidate["telegram_id"])
@@ -30,7 +32,7 @@ async def ratings(
         text(
             """
             SELECT r.primary_score, r.behavioral_score, r.referral_bonus,
-                   r.combined_score, r.updated_at
+                   r.peer_score, r.combined_score, r.updated_at
               FROM users u
          LEFT JOIN ratings r ON r.user_id = u.id
              WHERE u.telegram_id = :tid

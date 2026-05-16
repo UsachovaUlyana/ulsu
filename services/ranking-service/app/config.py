@@ -26,10 +26,12 @@ class Settings(CommonSettings):
     w_l2_activity: float = 0.1
 
     w_combined_l1: float = 0.3
-    w_combined_l2: float = 0.6
+    w_combined_l2: float = 0.5
     w_combined_referral: float = 0.1
+    w_combined_peer: float = 0.1
 
     referral_bonus_cap: float = 0.3
+    peer_dampening_threshold: float = 20.0
 
 
 settings = Settings()

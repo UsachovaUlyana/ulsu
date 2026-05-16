@@ -19,6 +19,12 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+
 class Swipe(Base):
     __tablename__ = "swipes"
     __table_args__ = (
@@ -60,4 +66,29 @@ class Match(Base):
     )
     started_dialog_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+
+class PeerReview(Base):
+    __tablename__ = "peer_reviews"
+    __table_args__ = (
+        UniqueConstraint("reviewer_id", "reviewee_id", name="uq_peer_review_pair"),
+        CheckConstraint("score BETWEEN 1 AND 5", name="ck_peer_review_score_range"),
+        CheckConstraint("reviewer_id <> reviewee_id", name="ck_peer_review_no_self"),
+        Index("ix_peer_reviews_reviewee_id", "reviewee_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    reviewer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE")
+    )
+    reviewee_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE")
+    )
+    score: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

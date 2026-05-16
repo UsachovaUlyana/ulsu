@@ -153,3 +153,19 @@ async def create_referral(
     await session.commit()
     await session.refresh(ref)
     return ref
+
+
+async def delete_user(
+    session: AsyncSession, telegram_id: int
+) -> models.User | None:
+    stmt = (
+        select(models.User)
+        .where(models.User.telegram_id == telegram_id)
+        .options(selectinload(models.User.photos))
+    )
+    user = (await session.execute(stmt)).scalar_one_or_none()
+    if user is None:
+        return None
+    await session.delete(user)
+    await session.commit()
+    return user

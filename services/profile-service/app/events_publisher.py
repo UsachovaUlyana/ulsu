@@ -3,6 +3,7 @@ from __future__ import annotations
 from shared.events import (
     EXCHANGE_PROFILES,
     EXCHANGE_REFERRALS,
+    RK_PROFILE_DELETED,
     RK_PROFILE_UPDATED,
     RK_REFERRAL_APPLIED,
 )
@@ -17,6 +18,14 @@ async def emit_profile_updated(user_id: int, telegram_id: int) -> None:
     await publisher.publish(
         EXCHANGE_PROFILES,
         RK_PROFILE_UPDATED,
+        {"user_id": user_id, "telegram_id": telegram_id},
+    )
+
+
+async def emit_profile_deleted(user_id: int, telegram_id: int) -> None:
+    await publisher.publish(
+        EXCHANGE_PROFILES,
+        RK_PROFILE_DELETED,
         {"user_id": user_id, "telegram_id": telegram_id},
     )
 

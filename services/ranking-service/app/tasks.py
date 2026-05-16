@@ -19,7 +19,7 @@ from shared.metrics import recalc_duration_seconds
 from .celery_app import celery_app
 from .config import settings
 from .database import SyncSessionLocal
-from .formulas import behavioral_score, combined_score, primary_score
+from .formulas import behavioral_score, combined_score, peer_score_formula, primary_score
 
 logger = get_logger(__name__)
 
@@ -81,6 +81,57 @@ def _upsert_rating(session, user_id: int, **fields) -> None:
         ),
         {"user_id": user_id, **fields},
     )
+
+
+# ---------------- Peer ----------------
+
+
+@celery_app.task(name="app.tasks.recalc_peer_for_user")
+def recalc_peer_for_user(user_id: int) -> None:
+    start = time.perf_counter()
+    with SyncSessionLocal() as session:
+        row = session.execute(
+            text(
+                """
+                SELECT AVG(score) AS peer_avg, COUNT(*) AS peer_count
+                  FROM peer_reviews
+                 WHERE reviewee_id = :uid
+                """
+            ),
+            {"uid": user_id},
+        ).mappings().first()
+        peer_avg = float(row["peer_avg"]) if row and row["peer_avg"] is not None else None
+        peer_count = int(row["peer_count"] or 0) if row else 0
+        score = peer_score_formula(peer_avg, peer_count)
+        _upsert_rating(session, user_id, peer_score=score)
+        session.commit()
+    recalc_duration_seconds.labels(level="peer").observe(time.perf_counter() - start)
+    logger.info("peer_recalculated", user_id=user_id, score=score)
+
+
+@celery_app.task(name="app.tasks.recalc_peer_all")
+def recalc_peer_all() -> None:
+    start = time.perf_counter()
+    with SyncSessionLocal() as session:
+        users = session.execute(text("SELECT id FROM users")).scalars().all()
+        for user_id in users:
+            row = session.execute(
+                text(
+                    """
+                    SELECT AVG(score) AS peer_avg, COUNT(*) AS peer_count
+                      FROM peer_reviews
+                     WHERE reviewee_id = :uid
+                    """
+                ),
+                {"uid": user_id},
+            ).mappings().first()
+            peer_avg = float(row["peer_avg"]) if row and row["peer_avg"] is not None else None
+            peer_count = int(row["peer_count"] or 0) if row else 0
+            score = peer_score_formula(peer_avg, peer_count)
+            _upsert_rating(session, user_id, peer_score=score)
+        session.commit()
+    recalc_duration_seconds.labels(level="peer_all").observe(time.perf_counter() - start)
+    logger.info("peer_all_recalculated", users=len(users))
 
 
 @celery_app.task(name="app.tasks.recalc_primary_for_user")
@@ -150,16 +201,17 @@ def recalc_combined_all() -> None:
                 SELECT u.id AS user_id,
                        COALESCE(r.primary_score, 0)    AS p,
                        COALESCE(r.behavioral_score, 0) AS b,
+                       COALESCE(r.peer_score, 0)       AS peer,
                        COALESCE(SUM(rf.bonus_value), 0) AS ref_bonus
                   FROM users u
              LEFT JOIN ratings r  ON r.user_id  = u.id
              LEFT JOIN referrals rf ON rf.inviter_id = u.id OR rf.invitee_id = u.id
-                 GROUP BY u.id, r.primary_score, r.behavioral_score
+                 GROUP BY u.id, r.primary_score, r.behavioral_score, r.peer_score
                 """
             )
         ).mappings().all()
         for row in rows:
-            score = combined_score(row["p"], row["b"], row["ref_bonus"])
+            score = combined_score(row["p"], row["b"], row["ref_bonus"], row["peer"])
             _upsert_rating(
                 session,
                 row["user_id"],

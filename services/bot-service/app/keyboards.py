@@ -33,17 +33,6 @@ def target_gender_kb() -> InlineKeyboardMarkup:
     )
 
 
-def location_request_kb() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📍 Отправить геолокацию", request_location=True)],
-            [KeyboardButton(text="Пропустить")],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
-
-
 def remove_kb() -> ReplyKeyboardRemove:
     return ReplyKeyboardRemove()
 
@@ -76,23 +65,6 @@ def age_preset_kb() -> InlineKeyboardMarkup:
     )
 
 
-def distance_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="5 км", callback_data="dist:5"),
-                InlineKeyboardButton(text="10 км", callback_data="dist:10"),
-                InlineKeyboardButton(text="25 км", callback_data="dist:25"),
-            ],
-            [
-                InlineKeyboardButton(text="50 км", callback_data="dist:50"),
-                InlineKeyboardButton(text="100 км", callback_data="dist:100"),
-                InlineKeyboardButton(text="∞ Любая", callback_data="dist:0"),
-            ],
-        ]
-    )
-
-
 def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -102,11 +74,61 @@ def main_menu_kb() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="⚙️ Фильтры"),
             ],
             [
+                KeyboardButton(text="❤️ Кто лайкнул"),
                 KeyboardButton(text="💌 Мои мэтчи"),
+            ],
+            [
                 KeyboardButton(text="🎁 Пригласить друга"),
             ],
         ],
         resize_keyboard=True,
+    )
+
+
+def profile_actions_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗑 Удалить анкету", callback_data="profile:delete"
+                )
+            ]
+        ]
+    )
+
+
+def confirm_delete_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да, удалить", callback_data="profile:delete:confirm"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена", callback_data="profile:delete:cancel"
+                ),
+            ]
+        ]
+    )
+
+
+def likes_swipe_kb(target_telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❤️ Лайк", callback_data=f"likes:like:{target_telegram_id}"
+                ),
+                InlineKeyboardButton(
+                    text="👎 Скип", callback_data=f"likes:skip:{target_telegram_id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🛑 Стоп", callback_data="likes:stop"
+                )
+            ],
+        ]
     )
 
 
@@ -126,5 +148,33 @@ def swipe_kb(target_telegram_id: int) -> InlineKeyboardMarkup:
                     text="🛑 Стоп", callback_data="swipe:stop"
                 )
             ],
+        ]
+    )
+
+
+def match_actions_kb(partner_telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⭐ Оценить", callback_data=f"match:rate:{partner_telegram_id}"
+                )
+            ]
+        ]
+    )
+
+
+def rate_peer_kb(reviewee_telegram_id: int) -> InlineKeyboardMarkup:
+    stars = [
+        InlineKeyboardButton(
+            text=f"{'⭐' * s}", callback_data=f"rate:{s}:{reviewee_telegram_id}"
+        )
+        for s in range(1, 6)
+    ]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            stars[:3],
+            stars[3:],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="rate:cancel")],
         ]
     )

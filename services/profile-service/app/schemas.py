@@ -33,8 +33,6 @@ class ProfileUpsert(BaseModel):
     city: str | None = Field(default=None, max_length=64)
     bio: str | None = Field(default=None, max_length=2000)
     interests: list[str] | None = Field(default=None, max_length=20)
-    lat: float | None = Field(default=None, ge=-90, le=90)
-    lon: float | None = Field(default=None, ge=-180, le=180)
 
 
 class ProfileResponse(ProfileUpsert):
@@ -56,7 +54,6 @@ class PreferencesUpsert(BaseModel):
     target_gender: TargetGender
     age_min: int = Field(ge=18, le=100, default=18)
     age_max: int = Field(ge=18, le=100, default=99)
-    max_distance_km: int | None = Field(default=None, ge=1, le=20000)
 
 
 class PreferencesResponse(PreferencesUpsert):

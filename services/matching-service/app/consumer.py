@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.events import (
     EXCHANGE_MATCHES,
     EXCHANGE_SWIPES,
+    RK_LIKE_RECEIVED,
     RK_MATCH_CREATED,
     RK_SWIPE_CREATED,
 )
@@ -100,6 +101,16 @@ async def handle_swipe_event(payload: dict) -> None:
         ).scalar_one_or_none()
 
         if reverse is None:
+            await publisher.publish(
+                EXCHANGE_SWIPES,
+                RK_LIKE_RECEIVED,
+                {
+                    "swiper_telegram_id": swiper_tid,
+                    "target_telegram_id": target_tid,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            logger.info("like_received_published", swiper_tid=swiper_tid, target_tid=target_tid)
             return
 
         u1, u2 = sorted((swiper_id, target_id))

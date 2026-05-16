@@ -2,23 +2,7 @@
 
 from __future__ import annotations
 
-from math import asin, cos, radians, sin, sqrt
-
 from .config import settings
-
-# ---------------- Distance (Haversine) ----------------
-
-
-def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6371.0
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    a = (
-        sin(dlat / 2) ** 2
-        + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-    )
-    return 2 * R * asin(sqrt(a))
-
 
 # ---------------- L1 — primary ----------------
 
@@ -80,12 +64,24 @@ def behavioral_score(
 # ---------------- L3 — combined ----------------
 
 
+def peer_score_formula(peer_avg: float | None, peer_count: int) -> float:
+    if peer_avg is None or peer_count == 0:
+        return 0.0
+    peer_normalized = (peer_avg - 1.0) / 4.0
+    dampening = min(peer_count / settings.peer_dampening_threshold, 1.0)
+    return peer_normalized * dampening
+
+
 def combined_score(
-    primary: float, behavioral: float, referral_bonus: float
+    primary: float,
+    behavioral: float,
+    referral_bonus: float,
+    peer_score: float = 0.0,
 ) -> float:
     bonus = min(referral_bonus, settings.referral_bonus_cap)
     return (
         settings.w_combined_l1 * primary
         + settings.w_combined_l2 * behavioral
         + settings.w_combined_referral * bonus
+        + settings.w_combined_peer * peer_score
     )

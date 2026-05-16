@@ -17,10 +17,14 @@ from shared.events import (
     EXCHANGE_MATCHES,
     EXCHANGE_PROFILES,
     EXCHANGE_REFERRALS,
+    EXCHANGE_REVIEWS,
     EXCHANGE_SWIPES,
     RK_MATCH_CREATED,
+    RK_PROFILE_DELETED,
     RK_PROFILE_UPDATED,
     RK_REFERRAL_APPLIED,
+    RK_REVIEW_CREATED,
+    RK_REVIEW_UPDATED,
     RK_SWIPE_CREATED,
 )
 from shared.logging import get_logger
@@ -80,6 +84,9 @@ async def handle_swipe(payload: dict) -> None:
     if swiper_id is None:
         return
     await _log_activity(swiper_id, "swipe")
+    # Invalidate feed cache so the swiped profile does not reappear
+    from .feed_service import get_redis
+    await get_redis().delete(f"feed:{swiper_id}")
 
 
 async def handle_match(payload: dict) -> None:
@@ -92,10 +99,28 @@ async def handle_match(payload: dict) -> None:
             await _log_activity(uid, "match")
 
 
+async def handle_profile_deleted(payload: dict) -> None:
+    user_id = int(payload["user_id"])
+    from .feed_service import get_redis
+    await get_redis().delete(f"feed:{user_id}")
+
+
 async def handle_referral(payload: dict) -> None:
     """Bonuses are accumulated in the `referrals` table; the L3 recalc reads them.
     Trigger an immediate combined recalc so the boost shows up before the hourly cron."""
     from .tasks import recalc_combined_all
+    recalc_combined_all.delay()
+
+
+async def handle_review(payload: dict) -> None:
+    reviewee_id = int(payload["reviewee_id"])
+    from .tasks import recalc_peer_for_user, recalc_combined_all
+
+    recalc_peer_for_user.delay(reviewee_id)
+    # Invalidate feed caches so the new peer_score is reflected in rankings
+    from .feed_service import get_redis
+    await get_redis().delete(f"feed:{reviewee_id}")
+    # Also trigger combined recalc so the L3 score updates quickly
     recalc_combined_all.delay()
 
 
@@ -107,6 +132,13 @@ def make_consumers() -> list[RabbitMQConsumer]:
             queue_name="ranking.profile_events",
             routing_keys=[RK_PROFILE_UPDATED],
             handler=handle_profile_updated,
+        ),
+        RabbitMQConsumer(
+            url=settings.rabbitmq_url,
+            exchange=EXCHANGE_PROFILES,
+            queue_name="ranking.profile_deleted_events",
+            routing_keys=[RK_PROFILE_DELETED],
+            handler=handle_profile_deleted,
         ),
         RabbitMQConsumer(
             url=settings.rabbitmq_url,
@@ -128,6 +160,13 @@ def make_consumers() -> list[RabbitMQConsumer]:
             queue_name="ranking.referral_events",
             routing_keys=[RK_REFERRAL_APPLIED],
             handler=handle_referral,
+        ),
+        RabbitMQConsumer(
+            url=settings.rabbitmq_url,
+            exchange=EXCHANGE_REVIEWS,
+            queue_name="ranking.review_events",
+            routing_keys=[RK_REVIEW_CREATED, RK_REVIEW_UPDATED],
+            handler=handle_review,
         ),
     ]
 

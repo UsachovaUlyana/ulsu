@@ -32,6 +32,10 @@ icebreaker_sent_total = Counter(
     "Total icebreaker messages sent",
     ["category"],
 )
+likes_notified_total = Counter(
+    "dating_likes_notified_total",
+    "Total one-way like notifications sent",
+)
 
 feed_response_seconds = Histogram(
     "dating_feed_response_seconds",

@@ -27,6 +27,10 @@ celery_app.conf.update(
             "task": "app.tasks.recalc_behavioral_all",
             "schedule": crontab(minute="*/15"),
         },
+        "recalc-peer-15min": {
+            "task": "app.tasks.recalc_peer_all",
+            "schedule": crontab(minute="*/15"),
+        },
         "recalc-combined-hourly": {
             "task": "app.tasks.recalc_combined_all",
             "schedule": crontab(minute=0),

@@ -32,7 +32,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64))
     referral_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     referred_by: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id"), nullable=True
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -65,8 +65,6 @@ class Profile(Base):
     city: Mapped[str | None] = mapped_column(String(64))
     bio: Mapped[str | None] = mapped_column(Text)
     interests: Mapped[list[str] | None] = mapped_column(ARRAY(String(32)))
-    lat: Mapped[float | None] = mapped_column(Float)
-    lon: Mapped[float | None] = mapped_column(Float)
     last_active_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -103,7 +101,6 @@ class Preferences(Base):
     target_gender: Mapped[str] = mapped_column(String(16))
     age_min: Mapped[int] = mapped_column(SmallInteger, default=18)
     age_max: Mapped[int] = mapped_column(SmallInteger, default=99)
-    max_distance_km: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

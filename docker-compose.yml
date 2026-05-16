@@ -119,6 +119,7 @@ services:
       context: .
       dockerfile: services/bot-service/Dockerfile
     container_name: dating-bot-service
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -143,6 +144,7 @@ services:
       context: .
       dockerfile: services/profile-service/Dockerfile
     container_name: dating-profile-service
+    restart: unless-stopped
     ports:
       - "8001:8001"
     environment:
@@ -167,6 +169,7 @@ services:
       context: .
       dockerfile: services/ranking-service/Dockerfile
     container_name: dating-ranking-service
+    restart: unless-stopped
     ports:
       - "8002:8002"
     environment:
@@ -190,6 +193,7 @@ services:
       context: .
       dockerfile: services/ranking-service/Dockerfile
     container_name: dating-celery-worker
+    restart: unless-stopped
     command: celery -A app.celery_app worker --loglevel=info
     environment:
       - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
@@ -209,6 +213,7 @@ services:
       context: .
       dockerfile: services/ranking-service/Dockerfile
     container_name: dating-celery-beat
+    restart: unless-stopped
     command: celery -A app.celery_app beat --loglevel=info
     environment:
       - DATABASE_URL=postgresql+asyncpg://dating_user:dating_pass@postgres:5432/dating_bot
@@ -228,6 +233,7 @@ services:
       context: .
       dockerfile: services/matching-service/Dockerfile
     container_name: dating-matching-service
+    restart: unless-stopped
     ports:
       - "8003:8003"
     environment:
@@ -246,6 +252,7 @@ services:
       context: .
       dockerfile: services/notification-service/Dockerfile
     container_name: dating-notification-service
+    restart: unless-stopped
     env_file:
       - .env
     environment:

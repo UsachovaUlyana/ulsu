@@ -13,9 +13,7 @@ from ..api_client import api_client
 from ..fsm import Registration
 from ..keyboards import (
     age_preset_kb,
-    distance_kb,
     gender_kb,
-    location_request_kb,
     main_menu_kb,
     photos_done_kb,
     remove_kb,
@@ -136,31 +134,7 @@ async def reg_city(message: Message, state: FSMContext) -> None:
     city = (message.text or "").strip()[:64]
     await state.update_data(city=city or None)
     await message.answer(
-        "Отправь свою геолокацию, чтобы мы показывали анкеты рядом. "
-        "Можешь пропустить — но без неё не сможем считать расстояние.",
-        reply_markup=location_request_kb(),
-    )
-    await state.set_state(Registration.location)
-
-
-# ---------------------------- Location ----------------------------
-
-
-@router.message(Registration.location, F.location)
-async def reg_location(message: Message, state: FSMContext) -> None:
-    await state.update_data(lat=message.location.latitude, lon=message.location.longitude)
-    await message.answer(
-        "📍 Локация сохранена. Расскажи о себе (или напиши «пропустить»).",
-        reply_markup=remove_kb(),
-    )
-    await state.set_state(Registration.bio)
-
-
-@router.message(Registration.location, F.text)
-async def reg_location_skip(message: Message, state: FSMContext) -> None:
-    await state.update_data(lat=None, lon=None)
-    await message.answer(
-        "Окей, без геолокации. Расскажи о себе (или напиши «пропустить»).",
+        "Расскажи о себе (или напиши «пропустить»).",
         reply_markup=remove_kb(),
     )
     await state.set_state(Registration.bio)
@@ -268,8 +242,7 @@ async def reg_photos_done(call: CallbackQuery, state: FSMContext, bot: Bot) -> N
         "city": data.get("city"),
         "bio": data.get("bio"),
         "interests": data.get("interests") or None,
-        "lat": data.get("lat"),
-        "lon": data.get("lon"),
+        # lat/lon removed — city-only filtering
     }
     await api_client.upsert_profile(telegram_id, profile_payload)
 
@@ -311,11 +284,7 @@ async def reg_pref_age_preset(call: CallbackQuery, state: FSMContext) -> None:
         return
     age_min, age_max = int(parts[1]), int(parts[2])
     await state.update_data(pref_age_min=age_min, pref_age_max=age_max)
-    await call.message.answer(
-        f"Окей, ищем {age_min}–{age_max}. Радиус поиска?",
-        reply_markup=distance_kb(),
-    )
-    await state.set_state(Registration.pref_distance)
+    await _complete_registration(call.from_user.id, call.message, state)
     await call.answer()
 
 
@@ -347,33 +316,28 @@ async def reg_pref_age_max_custom(message: Message, state: FSMContext) -> None:
         await message.answer(f"Должно быть от {age_min} до 100.")
         return
     await state.update_data(pref_age_max=age_max)
-    await message.answer("Радиус поиска?", reply_markup=distance_kb())
-    await state.set_state(Registration.pref_distance)
+    await _complete_registration(message.from_user.id, message, state)
 
 
-@router.callback_query(Registration.pref_distance, F.data.startswith("dist:"))
-async def reg_pref_distance(call: CallbackQuery, state: FSMContext) -> None:
-    dist = int(call.data.split(":", 1)[1])
+async def _complete_registration(telegram_id: int, message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     payload = {
         "target_gender": data["pref_target"],
         "age_min": data["pref_age_min"],
         "age_max": data["pref_age_max"],
-        "max_distance_km": dist or None,
     }
-    await api_client.upsert_preferences(call.from_user.id, payload)
+    await api_client.upsert_preferences(telegram_id, payload)
 
-    # Apply referral now (after registration is complete) if there was one in /start
+    # Применяем реферальный код только после полной регистрации анкеты.
     referral_code = data.get("referral_code")
     if referral_code:
-        await api_client.apply_referral(referral_code, call.from_user.id)
+        await api_client.apply_referral(referral_code, telegram_id)
 
     await state.clear()
-    await call.message.answer(
+    await message.answer(
         "✅ Анкета готова! Можешь начинать знакомиться.",
         reply_markup=main_menu_kb(),
     )
-    await call.answer()
 
 
 # ---------------------------- /menu fallback ----------------------------
