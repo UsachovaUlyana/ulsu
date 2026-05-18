@@ -53,6 +53,7 @@ graph LR
 | [`docs/services.md`](docs/services.md) | API endpoints и логика каждого микросервиса |
 | [`docs/user_scenarios.md`](docs/user_scenarios.md) | Пользовательские сценарии (use cases) с sequence diagrams |
 | [`docs/report_criteria.md`](docs/report_criteria.md) | **Отчёт о соответствии критериям оценивания** — детальный разбор по каждому пункту |
+| [`docs/tech_stack.md`](docs/tech_stack.md) | **Отчёт по стеку технологий** — что по заданию, что подключено дополнительно и обоснования |
 | [`docs/jmeter_results.md`](docs/jmeter_results.md) | Результаты нагрузочного тестирования (JMeter) |
 
 ---
